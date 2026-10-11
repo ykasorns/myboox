@@ -18,6 +18,17 @@ android {
         versionName = "1.0.0"
     }
 
+    signingConfigs {
+        // One fixed key for every build, so a new APK installs over the previous one.
+        // Fine for a personal sideloaded app; use a private key kept out of the repo for Play.
+        create("myboox") {
+            storeFile = rootProject.file("signing/myboox-release.jks")
+            storePassword = "myboox-reader"
+            keyAlias = "myboox"
+            keyPassword = "myboox-reader"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -26,9 +37,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Personal sideload build: sign with the debug key so the APK installs directly.
-            // Replace with a real signing config before publishing to Google Play.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("myboox")
         }
     }
 

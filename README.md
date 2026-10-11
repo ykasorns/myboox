@@ -37,7 +37,7 @@ The app is fully offline. It has no internet permission, no account and no track
 
 Every push to `main` publishes a new release. The GitHub mobile app cannot download build artifacts, so use the release link instead.
 
-The APK is signed with a debug key, which is fine for installing on your own devices. Use a real signing key before you publish it to Google Play.
+Every build is signed with the same key (`signing/myboox-release.jks`), so new builds install over old ones. That key is in the repository, which is fine for a personal app; use a private key before you publish to Google Play.
 
 ## Build locally
 
