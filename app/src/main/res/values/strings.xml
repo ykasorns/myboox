@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Reader</string>
+
+    <string name="library_title">Library</string>
+    <string name="add_books">Add books</string>
+    <string name="more_options">More options</string>
+    <string name="empty_title">Your library is empty</string>
+    <string name="empty_body">Add EPUB, PDF or TXT files from your device to start reading.</string>
+    <string name="continue_reading">Continue reading</string>
+    <string name="all_books">All books</string>
+    <string name="book_new">New</string>
+    <string name="book_finished">Finished</string>
+    <string name="remove_book">Remove</string>
+    <string name="remove_title">Remove “%1$s”?</string>
+    <string name="remove_body">The book and your reading position will be deleted from this device.</string>
+    <string name="cancel">Cancel</string>
+    <string name="import_done">Books added: %1$d</string>
+    <string name="import_failed">Couldn\'t open %1$s</string>
+    <string name="sort_by">Sort by</string>
+    <string name="sort_recent">Recent</string>
+    <string name="sort_title">Title</string>
+    <string name="sort_author">Author</string>
+
+    <string name="back">Back</string>
+    <string name="contents">Contents</string>
+    <string name="section_n">Section %1$d</string>
+    <string name="page_of">%1$s of %2$d</string>
+    <string name="open_failed">This book couldn\'t be opened.</string>
+
+    <string name="appearance">Appearance</string>
+    <string name="brightness">Brightness</string>
+    <string name="brightness_auto">Auto</string>
+    <string name="text_size">Text size</string>
+    <string name="smaller_text">Smaller text</string>
+    <string name="larger_text">Larger text</string>
+    <string name="theme">Theme</string>
+    <string name="theme_white">White</string>
+    <string name="theme_paper">Paper</string>
+    <string name="theme_gray">Gray</string>
+    <string name="theme_night">Night</string>
+    <string name="font">Font</string>
+    <string name="font_original">Original</string>
+    <string name="font_sans">Sans</string>
+    <string name="font_serif">Serif</string>
+    <string name="line_spacing">Line spacing</string>
+    <string name="spacing_tight">Tight</string>
+    <string name="spacing_normal">Normal</string>
+    <string name="spacing_loose">Loose</string>
+    <string name="margins">Margins</string>
+    <string name="margin_narrow">Narrow</string>
+    <string name="margin_normal">Normal</string>
+    <string name="margin_wide">Wide</string>
+    <string name="justify_text">Justify text</string>
+    <string name="two_pages">Two pages in landscape</string>
+    <string name="volume_keys">Turn pages with volume buttons</string>
+    <string name="keep_screen_on">Keep screen on</string>
+</resources>

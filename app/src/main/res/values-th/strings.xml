@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Reader</string>
+
+    <string name="library_title">คลังหนังสือ</string>
+    <string name="add_books">เพิ่มหนังสือ</string>
+    <string name="more_options">ตัวเลือกเพิ่มเติม</string>
+    <string name="empty_title">ยังไม่มีหนังสือ</string>
+    <string name="empty_body">เพิ่มไฟล์ EPUB, PDF หรือ TXT จากเครื่องเพื่อเริ่มอ่าน</string>
+    <string name="continue_reading">อ่านต่อ</string>
+    <string name="all_books">หนังสือทั้งหมด</string>
+    <string name="book_new">ใหม่</string>
+    <string name="book_finished">อ่านจบแล้ว</string>
+    <string name="remove_book">ลบ</string>
+    <string name="remove_title">ลบ “%1$s” ใช่ไหม</string>
+    <string name="remove_body">หนังสือและตำแหน่งที่อ่านค้างไว้จะถูกลบออกจากเครื่องนี้</string>
+    <string name="cancel">ยกเลิก</string>
+    <string name="import_done">เพิ่มหนังสือแล้ว %1$d เล่ม</string>
+    <string name="import_failed">เปิดไฟล์ %1$s ไม่ได้</string>
+    <string name="sort_by">เรียงตาม</string>
+    <string name="sort_recent">ล่าสุด</string>
+    <string name="sort_title">ชื่อเรื่อง</string>
+    <string name="sort_author">ผู้แต่ง</string>
+
+    <string name="back">กลับ</string>
+    <string name="contents">สารบัญ</string>
+    <string name="section_n">ส่วนที่ %1$d</string>
+    <string name="page_of">%1$s จาก %2$d</string>
+    <string name="open_failed">เปิดหนังสือเล่มนี้ไม่ได้</string>
+
+    <string name="appearance">การแสดงผล</string>
+    <string name="brightness">ความสว่าง</string>
+    <string name="brightness_auto">อัตโนมัติ</string>
+    <string name="text_size">ขนาดตัวอักษร</string>
+    <string name="smaller_text">ตัวอักษรเล็กลง</string>
+    <string name="larger_text">ตัวอักษรใหญ่ขึ้น</string>
+    <string name="theme">ธีม</string>
+    <string name="theme_white">ขาว</string>
+    <string name="theme_paper">กระดาษ</string>
+    <string name="theme_gray">เทา</string>
+    <string name="theme_night">กลางคืน</string>
+    <string name="font">แบบอักษร</string>
+    <string name="font_original">ต้นฉบับ</string>
+    <string name="font_sans">ไม่มีหัว</string>
+    <string name="font_serif">มีหัว</string>
+    <string name="line_spacing">ระยะห่างบรรทัด</string>
+    <string name="spacing_tight">ชิด</string>
+    <string name="spacing_normal">ปกติ</string>
+    <string name="spacing_loose">ห่าง</string>
+    <string name="margins">ระยะขอบ</string>
+    <string name="margin_narrow">แคบ</string>
+    <string name="margin_normal">ปกติ</string>
+    <string name="margin_wide">กว้าง</string>
+    <string name="justify_text">จัดข้อความเต็มบรรทัด</string>
+    <string name="two_pages">แสดงสองหน้าเมื่อจอแนวนอน</string>
+    <string name="volume_keys">ใช้ปุ่มเสียงเปลี่ยนหน้า</string>
+    <string name="keep_screen_on">ไม่ให้หน้าจอดับขณะอ่าน</string>
+</resources>
