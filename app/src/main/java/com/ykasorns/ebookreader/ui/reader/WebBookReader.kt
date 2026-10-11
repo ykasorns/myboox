@@ -2,11 +2,7 @@ package com.ykasorns.ebookreader.ui.reader
 
 import android.webkit.WebView
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.waterfall
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
@@ -19,14 +15,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ykasorns.ebookreader.AppGraph
 import com.ykasorns.ebookreader.R
 import com.ykasorns.ebookreader.data.Book
+import com.ykasorns.ebookreader.data.PageTurn
 import com.ykasorns.ebookreader.data.ReaderSettings
 import com.ykasorns.ebookreader.data.TocEntry
 import com.ykasorns.ebookreader.data.WebManifest
@@ -52,8 +47,9 @@ fun WebBookReader(book: Book, settings: ReaderSettings, chrome: ReaderChromeStat
     }
 
     val scope = rememberCoroutineScope()
+    val curl = rememberPageCurlState(scope)
     val controller = remember(book.id) {
-        WebBookController(context.applicationContext, book.id, manifest, book.position) { progress, position ->
+        WebBookController(context.applicationContext, book.id, manifest, book.position, scope, curl) { progress, position ->
             scope.launch(Dispatchers.IO) { library.updatePosition(book.id, progress, position) }
         }
     }
@@ -88,31 +84,35 @@ fun WebBookReader(book: Book, settings: ReaderSettings, chrome: ReaderChromeStat
     VolumeKeysEffect(settings.volumeKeys) { forward -> if (forward) controller.next() else controller.prev() }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Text stays clear of the camera cutout and rounded corners, while the page colour
-        // itself runs to every edge of the screen.
-        val density = LocalDensity.current
-        val direction = LocalLayoutDirection.current
-        val safe = WindowInsets.displayCutout.union(WindowInsets.waterfall)
+        // The page colour runs to every edge of the screen; text comes as close to the top as
+        // the camera cutout allows (see rememberPageFrame).
         val wide = maxWidth >= 600.dp
+        val frame = rememberPageFrame(settings.fullScreenText, maxWidth, wide)
         val side = settings.margin.dp * if (wide) 1.6f else 1f
-        val vertical = if (wide) 56f else 44f
-        val padding = with(density) {
-            PagePadding(
-                top = safe.getTop(this).toDp().value + vertical,
-                right = safe.getRight(this, direction).toDp().value + side,
-                bottom = safe.getBottom(this).toDp().value + vertical,
-                left = safe.getLeft(this, direction).toDp().value + side,
-            )
-        }
+        val padding = PagePadding(
+            top = frame.top,
+            right = frame.right + side,
+            bottom = frame.bottom,
+            left = frame.left + side,
+        )
         val styleJson = remember(settings, padding) { webStyleJson(settings, padding) }
         val background = settings.theme.background.toInt()
-        SideEffect { controller.applyStyle(styleJson, background) }
+        // Same rule as reader.js: two columns on wide landscape screens.
+        val spread = settings.twoPageLandscape && maxWidth > maxHeight && maxWidth >= 700.dp
+        SideEffect {
+            controller.pageTurn = settings.pageTurn
+            curl.mode = settings.pageTurn
+            curl.spread = spread
+            curl.paperColor = background
+            controller.applyStyle(styleJson, background)
+        }
 
         AndroidView(
-            factory = { ctx -> WebView(ctx).also(controller::attach) },
-            onRelease = { it.destroy() },
+            factory = { ctx -> controller.createView(ctx) },
+            onRelease = { frameView -> (frameView.getChildAt(0) as? WebView)?.destroy() },
             modifier = Modifier.fillMaxSize(),
         )
+        PageCurlOverlay(curl)
 
         val label = { fraction: Float -> "${(fraction * 100).roundToInt()}%" }
         ReaderChrome(
@@ -120,7 +120,9 @@ fun WebBookReader(book: Book, settings: ReaderSettings, chrome: ReaderChromeStat
             theme = settings.theme,
             title = book.title,
             header = chapterTitles.getOrNull(controller.chapter) ?: book.title,
+            headerPlacement = frame.header,
             footer = stringResource(R.string.page_of, (controller.page + 1).toString(), controller.pageCount),
+            footerBottom = frame.footerBottom,
             progress = controller.progress,
             sliderLabel = label,
             onSeek = controller::seek,
@@ -160,6 +162,9 @@ private fun webStyleJson(settings: ReaderSettings, padding: PagePadding): String
         .put("lineHeight", settings.lineSpacing.value.toDouble())
         .put("justify", settings.justify)
         .put("twoPage", settings.twoPageLandscape)
+        // With the curl animation the app handles swipes; otherwise reader.js does.
+        .put("swipe", settings.pageTurn != PageTurn.CURL)
+        .put("animate", settings.pageTurn == PageTurn.SLIDE)
         .put(
             "padding",
             JSONObject()

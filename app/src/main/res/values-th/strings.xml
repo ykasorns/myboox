@@ -55,4 +55,14 @@
     <string name="two_pages">แสดงสองหน้าเมื่อจอแนวนอน</string>
     <string name="volume_keys">ใช้ปุ่มเสียงเปลี่ยนหน้า</string>
     <string name="keep_screen_on">ไม่ให้หน้าจอดับขณะอ่าน</string>
+    <string name="full_screen_text">เต็มจอสุด (ซ่อนชื่อบทและเลขหน้า)</string>
+    <string name="page_turn">การพลิกหน้า</string>
+    <string name="turn_curl">พับกระดาษ</string>
+    <string name="turn_slide">เลื่อน</string>
+    <string name="turn_none">ไม่มี</string>
+    <string name="pdf_layout">รูปแบบ PDF</string>
+    <string name="pdf_auto">อัตโนมัติ</string>
+    <string name="pdf_scroll">เลื่อนต่อเนื่อง</string>
+    <string name="pdf_pages">ทีละหน้า</string>
+    <string name="pdf_crop">ตัดขอบขาว</string>
 </resources>

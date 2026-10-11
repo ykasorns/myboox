@@ -4,29 +4,40 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewConfiguration
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewFeature
 import com.ykasorns.ebookreader.data.LibraryRepository
+import com.ykasorns.ebookreader.data.PageTurn
 import com.ykasorns.ebookreader.data.WebManifest
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.File
+import kotlin.math.abs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Drives the WebView that renders EPUB and TXT books: loads one chapter at a time, injects
@@ -37,8 +48,10 @@ class WebBookController(
     private val bookId: String,
     private val manifest: WebManifest,
     initialPosition: String,
+    private val scope: CoroutineScope,
+    private val curl: PageCurlState,
     private val onPositionChanged: (progress: Float, position: String) -> Unit,
-) {
+) : ReaderFrame.TurnHandler {
     var chapter by mutableIntStateOf(0)
         private set
     var page by mutableIntStateOf(0)
@@ -55,6 +68,7 @@ class WebBookController(
 
     private val main = Handler(Looper.getMainLooper())
     private var webView: WebView? = null
+    private var frame: ReaderFrame? = null
     private var appliedStyle: String? = null
     private var backgroundColor = Color.WHITE
 
@@ -108,8 +122,27 @@ class WebBookController(
         return ((offsets[chapter] + within) / totalWeight).toFloat().coerceIn(0f, 1f)
     }
 
+    /** How pages turn; with [PageTurn.CURL] the app animates the page instead of reader.js. */
+    var pageTurn: PageTurn = PageTurn.CURL
+        set(value) {
+            field = value
+            frame?.curlEnabled = value == PageTurn.CURL
+        }
+
+    /** Builds the view hierarchy for the reader: a [ReaderFrame] holding the WebView. */
+    fun createView(context: Context): ReaderFrame {
+        val frame = ReaderFrame(context)
+        val view = WebView(context)
+        frame.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        frame.turnHandler = this
+        frame.curlEnabled = pageTurn == PageTurn.CURL
+        this.frame = frame
+        attach(view)
+        return frame
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
-    fun attach(view: WebView) {
+    private fun attach(view: WebView) {
         webView = view
         view.settings.apply {
             javaScriptEnabled = true
@@ -138,6 +171,10 @@ class WebBookController(
 
     fun detach() {
         webView = null
+        frame?.turnHandler = null
+        frame = null
+        curl.end()
+        turning = false
     }
 
     fun applyStyle(json: String, background: Int) {
@@ -152,9 +189,181 @@ class WebBookController(
         }
     }
 
-    fun next() = js("window.reader&&reader.next()")
+    fun next() = turn(forward = true)
 
-    fun prev() = js("window.reader&&reader.prev()")
+    fun prev() = turn(forward = false)
+
+    private fun turn(forward: Boolean) {
+        if (pageTurn == PageTurn.CURL) {
+            autoTurn(forward)
+        } else {
+            js(if (forward) "window.reader&&reader.next()" else "window.reader&&reader.prev()")
+        }
+    }
+
+    // ---- Page curl ---------------------------------------------------------------------------
+    //
+    // A turn works on snapshots: the current page is captured, the WebView moves to the
+    // neighbouring page underneath the overlay, that page is captured too, and the overlay
+    // animates between the two images. If the turn is abandoned the WebView moves back.
+
+    private var turning = false
+    private var turnToken = 0
+    private var turnForward = true
+    private var chapterBefore = 0
+    private var pageBefore = 0
+    private var pageCountBefore = 1
+    private var neighbour: Bitmap? = null
+    private var onChapterReady: (() -> Unit)? = null
+    private val buffers = arrayOfNulls<Bitmap>(2)
+
+    override val isTurning: Boolean get() = turning
+
+    private fun atStart() = chapter == 0 && page == 0
+
+    private fun atEnd() = chapter == lastChapter && page >= pageCount - 1
+
+    private fun capture(slot: Int): Bitmap? {
+        val view = webView ?: return null
+        if (view.width <= 0 || view.height <= 0) return null
+        var bitmap = buffers[slot]
+        if (bitmap == null || bitmap.width != view.width || bitmap.height != view.height) {
+            bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            buffers[slot] = bitmap
+        }
+        bitmap.eraseColor(backgroundColor)
+        view.draw(Canvas(bitmap))
+        return bitmap
+    }
+
+    /** Captures the WebView once the page it was just told to show has really been drawn. */
+    private fun captureWhenDrawn(token: Int, slot: Int, onCaptured: (Bitmap?) -> Unit) {
+        val view = webView ?: return
+        view.postVisualStateCallback(token.toLong(), object : WebView.VisualStateCallback() {
+            override fun onComplete(requestId: Long) {
+                view.postOnAnimation {
+                    view.postOnAnimation {
+                        if (token == turnToken) onCaptured(capture(slot))
+                    }
+                }
+            }
+        })
+    }
+
+    /**
+     * Prepares a turn: shows the current page in the overlay and moves the WebView to the
+     * neighbouring page. [onNeighbour] receives the neighbouring page's image.
+     */
+    private fun prepareTurn(forward: Boolean, show: (current: Bitmap) -> Unit, onNeighbour: (Bitmap?) -> Unit): Boolean {
+        if (turning || webView == null) return false
+        if (if (forward) atEnd() else atStart()) return false
+        val current = capture(0) ?: return false
+        turning = true
+        val token = ++turnToken
+        turnForward = forward
+        chapterBefore = chapter
+        pageBefore = page
+        pageCountBefore = pageCount
+        neighbour = null
+        show(current)
+        scope.launch {
+            // Let the overlay reach the screen before the WebView changes underneath it.
+            withFrameNanos { }
+            withFrameNanos { }
+            if (token != turnToken) return@launch
+            webView?.evaluateJavascript("window.reader?reader.step(${if (forward) 1 else -1}):'missing'") { result ->
+                if (token != turnToken) return@evaluateJavascript
+                when (result) {
+                    "\"ok\"" -> captureWhenDrawn(token, 1) { bitmap ->
+                        neighbour = bitmap
+                        onNeighbour(bitmap)
+                    }
+                    "\"boundary\"" -> {
+                        onChapterReady = { captureWhenDrawn(token, 1) { bitmap -> neighbour = bitmap; onNeighbour(bitmap) } }
+                        if (forward) openChapter(chapter + 1, TARGET_START) else openChapter(chapter - 1, TARGET_END)
+                    }
+                    else -> onNeighbour(null)
+                }
+            }
+        }
+        return true
+    }
+
+    override fun beginDrag(forward: Boolean, x: Float, y: Float): Boolean = prepareTurn(
+        forward,
+        show = { current ->
+            if (forward) curl.begin(true, x, y, front = current, under = null) else curl.begin(false, x, y, front = null, under = current)
+        },
+        onNeighbour = { other ->
+            if (forward) curl.setBitmaps(front = buffers[0], under = other) else curl.setBitmaps(front = other, under = buffers[0])
+        },
+    )
+
+    override fun drag(x: Float, y: Float) = curl.drag(x, y)
+
+    override fun release(velocityX: Float) = curl.release(velocityX) { navigated -> finishTurn(navigated) }
+
+    private fun autoTurn(forward: Boolean) {
+        var started = false
+        val token = turnToken + 1
+        val begun = prepareTurn(
+            forward,
+            show = { current ->
+                // Hold the current page on screen until the other page is ready, then turn.
+                curl.begin(forward, 0f, 0f, front = current, under = current)
+                curl.setBitmaps(front = current, under = current)
+            },
+            onNeighbour = { other ->
+                if (!started && token == turnToken) {
+                    started = true
+                    val current = buffers[0]
+                    if (forward) {
+                        curl.auto(true, front = current, under = other) { navigated -> finishTurn(navigated) }
+                    } else {
+                        curl.auto(false, front = other, under = current) { navigated -> finishTurn(navigated) }
+                    }
+                }
+            },
+        )
+        if (!begun) return
+        // Never leave the reader stuck if the neighbouring page is slow to appear.
+        main.postDelayed({
+            if (!started && token == turnToken && turning) {
+                started = true
+                val current = buffers[0]
+                if (forward) curl.auto(true, current, neighbour) { finishTurn(it) } else curl.auto(false, neighbour, current) { finishTurn(it) }
+            }
+        }, 700)
+    }
+
+    private fun finishTurn(navigated: Boolean) {
+        val token = turnToken
+        if (navigated) {
+            endTurn()
+            return
+        }
+        // The page fell back: return the WebView to where it was, then drop the overlay.
+        if (chapter == chapterBefore) {
+            js("window.reader&&reader.goTo($pageBefore)")
+            webView?.postVisualStateCallback(token.toLong(), object : WebView.VisualStateCallback() {
+                override fun onComplete(requestId: Long) {
+                    if (token == turnToken) endTurn()
+                }
+            }) ?: endTurn()
+        } else {
+            onChapterReady = { if (token == turnToken) endTurn() }
+            val fraction = pageBefore.toDouble() / pageCountBefore.coerceAtLeast(1)
+            openChapter(chapterBefore, if (pageBefore == 0) TARGET_START else fractionTarget(fraction))
+        }
+    }
+
+    private fun endTurn() {
+        turnToken++
+        onChapterReady = null
+        neighbour = null
+        curl.end()
+        turning = false
+    }
 
     /** Jump to an overall position in the book (0..1), as chosen on the progress slider. */
     fun seek(fraction: Float) {
@@ -235,17 +444,27 @@ class WebBookController(
                 this@WebBookController.pageCount = count.coerceAtLeast(1)
                 this@WebBookController.page = page.coerceIn(0, this@WebBookController.pageCount - 1)
                 savePosition()
+                onChapterReady?.let { ready ->
+                    onChapterReady = null
+                    ready()
+                }
             }
         }
 
         @JavascriptInterface
+        fun onSelection(active: Boolean) {
+            main.post { frame?.selectionActive = active }
+        }
+
+        @JavascriptInterface
         fun onTap(zone: String) {
-            main.post { this@WebBookController.onTap?.invoke(zone) }
+            main.post { if (!turning) this@WebBookController.onTap?.invoke(zone) }
         }
 
         @JavascriptInterface
         fun onBoundary(direction: String) {
             main.post {
+                if (turning) return@post
                 if (direction == "next" && chapter < lastChapter) {
                     openChapter(chapter + 1, TARGET_START)
                 } else if (direction == "prev" && chapter > 0) {
@@ -288,6 +507,8 @@ class WebBookController(
 
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
             if (webView === view) webView = null
+            curl.end()
+            turning = false
             crashed = true
             return true
         }
@@ -335,5 +556,81 @@ class WebBookController(
         private fun fractionTarget(fraction: Double) = "{\"type\":\"fraction\",\"value\":$fraction}"
 
         private fun anchorTarget(id: String) = "{\"type\":\"anchor\",\"value\":${JSONObject.quote(id)}}"
+    }
+}
+
+/**
+ * Hosts the WebView. When the page-curl animation is on it takes over horizontal drags (so the
+ * page follows the finger) while taps, long presses and text selection still reach the WebView.
+ */
+class ReaderFrame(context: Context) : FrameLayout(context) {
+    interface TurnHandler {
+        val isTurning: Boolean
+        fun beginDrag(forward: Boolean, x: Float, y: Float): Boolean
+        fun drag(x: Float, y: Float)
+        fun release(velocityX: Float)
+    }
+
+    var turnHandler: TurnHandler? = null
+    var curlEnabled = false
+    var selectionActive = false
+
+    private val slop = ViewConfiguration.get(context).scaledTouchSlop
+    private var downX = 0f
+    private var downY = 0f
+    private var tracking = false
+    private var dragging = false
+    private var velocity: VelocityTracker? = null
+
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+        val handler = turnHandler
+        if (!curlEnabled || handler == null) return false
+        if (handler.isTurning && !dragging) return true // ignore touches while a page is animating
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = ev.x
+                downY = ev.y
+                tracking = true
+                velocity?.recycle()
+                velocity = VelocityTracker.obtain().also { it.addMovement(ev) }
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> tracking = false
+            MotionEvent.ACTION_MOVE -> {
+                velocity?.addMovement(ev)
+                val dx = ev.x - downX
+                val dy = ev.y - downY
+                if (tracking && !selectionActive && abs(dx) > slop && abs(dx) > abs(dy) * 1.3f) {
+                    tracking = false
+                    if (handler.beginDrag(forward = dx < 0, x = downX, y = downY)) {
+                        dragging = true
+                        handler.drag(ev.x, ev.y)
+                        return true
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                tracking = false
+                velocity?.recycle()
+                velocity = null
+            }
+        }
+        return false
+    }
+
+    override fun onTouchEvent(ev: MotionEvent): Boolean {
+        if (!dragging) return turnHandler?.isTurning == true
+        velocity?.addMovement(ev)
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_MOVE -> turnHandler?.drag(ev.x, ev.y)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                velocity?.computeCurrentVelocity(1000)
+                val vx = if (ev.actionMasked == MotionEvent.ACTION_UP) velocity?.xVelocity ?: 0f else 0f
+                dragging = false
+                velocity?.recycle()
+                velocity = null
+                turnHandler?.release(vx)
+            }
+        }
+        return true
     }
 }

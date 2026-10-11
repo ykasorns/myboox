@@ -58,6 +58,8 @@ import androidx.compose.ui.unit.sp
 import com.ykasorns.ebookreader.R
 import com.ykasorns.ebookreader.data.LineSpacing
 import com.ykasorns.ebookreader.data.PageMargin
+import com.ykasorns.ebookreader.data.PageTurn
+import com.ykasorns.ebookreader.data.PdfLayout
 import com.ykasorns.ebookreader.data.ReaderFont
 import com.ykasorns.ebookreader.data.ReaderSettings
 import com.ykasorns.ebookreader.data.ReaderTheme
@@ -68,6 +70,7 @@ import com.ykasorns.ebookreader.data.TocEntry
 fun AppearanceSheet(
     settings: ReaderSettings,
     showTextOptions: Boolean,
+    wide: Boolean,
     onChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -197,6 +200,30 @@ fun AppearanceSheet(
                     onChange { it.copy(justify = value) }
                 }
             }
+            if (showTextOptions || !settings.pdfLayoutIsScroll(wide)) {
+                SwitchRow(stringResource(R.string.full_screen_text), settings.fullScreenText, theme, accent) { value ->
+                    onChange { it.copy(fullScreenText = value) }
+                }
+            }
+            if (!showTextOptions) {
+                Segments(
+                    label = stringResource(R.string.pdf_layout),
+                    options = PdfLayout.entries,
+                    selected = settings.pdfLayout,
+                    optionLabel = { stringResource(it.label) },
+                    theme = theme,
+                ) { option -> onChange { it.copy(pdfLayout = option) } }
+                SwitchRow(stringResource(R.string.pdf_crop), settings.pdfCrop, theme, accent) { value ->
+                    onChange { it.copy(pdfCrop = value) }
+                }
+            }
+            Segments(
+                label = stringResource(R.string.page_turn),
+                options = PageTurn.entries,
+                selected = settings.pageTurn,
+                optionLabel = { stringResource(it.label) },
+                theme = theme,
+            ) { option -> onChange { it.copy(pageTurn = option) } }
             SwitchRow(stringResource(R.string.two_pages), settings.twoPageLandscape, theme, accent) { value ->
                 onChange { it.copy(twoPageLandscape = value) }
             }
@@ -338,4 +365,11 @@ fun TocSheet(
             }
         }
     }
+}
+
+/** Whether PDFs are shown as one continuous scroll on this screen. */
+fun ReaderSettings.pdfLayoutIsScroll(wide: Boolean): Boolean = when (pdfLayout) {
+    PdfLayout.AUTO -> !wide
+    PdfLayout.SCROLL -> true
+    PdfLayout.PAGES -> false
 }

@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
@@ -47,6 +49,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ykasorns.ebookreader.R
 import com.ykasorns.ebookreader.data.ReaderTheme
@@ -62,7 +65,9 @@ fun ReaderChrome(
     theme: ReaderTheme,
     title: String,
     header: String,
+    headerPlacement: HeaderPlacement?,
     footer: String,
+    footerBottom: Dp?,
     progress: Float,
     sliderLabel: (Float) -> String,
     onSeek: (Float) -> Unit,
@@ -76,38 +81,46 @@ fun ReaderChrome(
     val barInsets = WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)
 
     Box(Modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = !visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter),
-        ) {
-            Text(
-                header,
-                color = muted,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        if (headerPlacement != null) {
+            AnimatedVisibility(
+                visible = !visible,
+                enter = fadeIn(),
+                exit = fadeOut(),
                 modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                    .padding(top = 14.dp, start = 56.dp, end = 56.dp),
-            )
+                    .align(Alignment.TopStart)
+                    .absoluteOffset(x = headerPlacement.left, y = headerPlacement.top),
+            ) {
+                Box(
+                    Modifier.size(headerPlacement.width, headerPlacement.height),
+                    contentAlignment = headerPlacement.alignment,
+                ) {
+                    Text(
+                        header,
+                        color = muted,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
-        AnimatedVisibility(
-            visible = !visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            Text(
-                footer,
-                color = muted,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
-                    .padding(bottom = 14.dp),
-            )
+        if (footerBottom != null) {
+            AnimatedVisibility(
+                visible = !visible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            ) {
+                Text(
+                    footer,
+                    color = muted,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+                        .padding(bottom = footerBottom),
+                )
+            }
         }
 
         AnimatedVisibility(

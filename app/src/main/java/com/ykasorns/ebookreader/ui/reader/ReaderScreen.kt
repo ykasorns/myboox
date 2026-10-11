@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -96,9 +97,11 @@ fun ReaderScreen(bookId: String, onClose: () -> Unit) {
     }
 
     if (showAppearance) {
+        val wide = LocalConfiguration.current.screenWidthDp >= 600
         AppearanceSheet(
             settings = settings,
             showTextOptions = book.format != BookFormat.PDF,
+            wide = wide,
             onChange = AppGraph.settings::update,
             onDismiss = { showAppearance = false },
         )

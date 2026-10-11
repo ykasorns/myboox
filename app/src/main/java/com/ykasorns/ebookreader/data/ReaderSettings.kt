@@ -41,6 +41,19 @@ enum class PageMargin(val dp: Float, @StringRes val label: Int) {
     WIDE(44f, R.string.margin_wide),
 }
 
+enum class PageTurn(@StringRes val label: Int) {
+    CURL(R.string.turn_curl),
+    SLIDE(R.string.turn_slide),
+    NONE(R.string.turn_none),
+}
+
+enum class PdfLayout(@StringRes val label: Int) {
+    /** Continuous scrolling on phones, page by page on tablets and foldables. */
+    AUTO(R.string.pdf_auto),
+    SCROLL(R.string.pdf_scroll),
+    PAGES(R.string.pdf_pages),
+}
+
 enum class LibrarySort { RECENT, TITLE, AUTHOR }
 
 data class ReaderSettings(
@@ -51,6 +64,12 @@ data class ReaderSettings(
     val lineSpacing: LineSpacing = LineSpacing.NORMAL,
     val margin: PageMargin = PageMargin.NORMAL,
     val justify: Boolean = false,
+    /** Hide the chapter title and page number so text uses as much of the screen as possible. */
+    val fullScreenText: Boolean = false,
+    val pageTurn: PageTurn = PageTurn.CURL,
+    val pdfLayout: PdfLayout = PdfLayout.AUTO,
+    /** Trim the white page margins of PDFs. */
+    val pdfCrop: Boolean = true,
     val twoPageLandscape: Boolean = true,
     val volumeKeys: Boolean = true,
     val keepScreenOn: Boolean = true,
@@ -89,6 +108,10 @@ class SettingsRepository(context: Context) {
         lineSpacing = enumOr(prefs.getString("lineSpacing", null), LineSpacing.NORMAL),
         margin = enumOr(prefs.getString("margin", null), PageMargin.NORMAL),
         justify = prefs.getBoolean("justify", false),
+        fullScreenText = prefs.getBoolean("fullScreenText", false),
+        pageTurn = enumOr(prefs.getString("pageTurn", null), PageTurn.CURL),
+        pdfLayout = enumOr(prefs.getString("pdfLayout", null), PdfLayout.AUTO),
+        pdfCrop = prefs.getBoolean("pdfCrop", true),
         twoPageLandscape = prefs.getBoolean("twoPageLandscape", true),
         volumeKeys = prefs.getBoolean("volumeKeys", true),
         keepScreenOn = prefs.getBoolean("keepScreenOn", true),
@@ -102,6 +125,10 @@ class SettingsRepository(context: Context) {
         putString("lineSpacing", s.lineSpacing.name)
         putString("margin", s.margin.name)
         putBoolean("justify", s.justify)
+        putBoolean("fullScreenText", s.fullScreenText)
+        putString("pageTurn", s.pageTurn.name)
+        putString("pdfLayout", s.pdfLayout.name)
+        putBoolean("pdfCrop", s.pdfCrop)
         putBoolean("twoPageLandscape", s.twoPageLandscape)
         putBoolean("volumeKeys", s.volumeKeys)
         putBoolean("keepScreenOn", s.keepScreenOn)

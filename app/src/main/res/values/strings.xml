@@ -55,4 +55,14 @@
     <string name="two_pages">Two pages in landscape</string>
     <string name="volume_keys">Turn pages with volume buttons</string>
     <string name="keep_screen_on">Keep screen on</string>
+    <string name="full_screen_text">Full-screen text (hide chapter title and page number)</string>
+    <string name="page_turn">Page turn</string>
+    <string name="turn_curl">Curl</string>
+    <string name="turn_slide">Slide</string>
+    <string name="turn_none">None</string>
+    <string name="pdf_layout">PDF layout</string>
+    <string name="pdf_auto">Auto</string>
+    <string name="pdf_scroll">Scroll</string>
+    <string name="pdf_pages">Pages</string>
+    <string name="pdf_crop">Trim white margins</string>
 </resources>

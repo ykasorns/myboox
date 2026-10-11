@@ -8,8 +8,10 @@ A simple Android ebook reader modelled on Books on iPad mini. It supports EPUB, 
 
 - **Edge-to-edge pages.** The page colour fills the whole screen, including the status-bar area and the camera notch, so there is no black strip at the top. While you read, the system bars are hidden. The text stays clear of the notch and the rounded corners.
   หน้ากระดาษเต็มจอจริง สีพื้นหลังลากไปถึงขอบบนและรอยบากกล้อง ไม่มีแถบดำด้านบน ส่วนตัวหนังสือจะเว้นไม่ให้โดนรอยบาก
-- **Turning pages like iPad.** Tap the right or left edge, or swipe, and the page follows your finger. Tap the middle to show the controls. The volume buttons can also turn pages.
-  แตะขอบขวา/ซ้ายหรือปัดเพื่อเปลี่ยนหน้า แตะกลางจอเพื่อเปิดเมนู ใช้ปุ่มเสียงเปลี่ยนหน้าได้
+- **Turning pages like iPad.** The page folds back like paper from the point where you grab it: a corner if you grab near the top or bottom, the whole edge if you grab the middle. Tap the right or left edge, swipe, or use the volume buttons. Tap the middle to show the controls. You can switch the animation to Slide or None.
+  พลิกหน้าแบบกระดาษพับตรงจุดที่จับ แตะขอบขวา/ซ้าย ปัด หรือใช้ปุ่มเสียงเปลี่ยนหน้า แตะกลางจอเพื่อเปิดเมนู
+- **Text close to the edge.** On phones with a camera cutout, the chapter title moves into the strip beside the camera, so the text starts just below it. "Full-screen text" hides the title and page number completely.
+  ตัวหนังสือชิดขอบบนเกือบเท่า iPad ชื่อบทย้ายไปอยู่ข้างกล้องหน้า และมีโหมด "เต็มจอสุด"
 - **The "Aa" panel.** It has text size, four themes (White, Paper, Gray, Night), font, line spacing, margins, justify, brightness, and keep screen on.
   ปรับขนาดตัวอักษร ธีม 4 แบบ แบบอักษร ระยะบรรทัด ระยะขอบ ความสว่าง
 - **Every screen size.** The library grid adapts to the screen width. On tablets and unfolded foldables in landscape, books show two pages side by side. Rotation and resizing keep your place.
@@ -19,7 +21,8 @@ A simple Android ebook reader modelled on Books on iPad mini. It supports EPUB, 
 - **Contents and progress slider.** You can jump to any chapter. EPUB 2 (NCX) and EPUB 3 (nav) are both supported. In TXT files, lines like "บทที่ 1" or "Chapter 1" become chapters.
 - **Thai TXT files.** Legacy TIS-620 / Windows-874 files are detected automatically.
   ไฟล์ TXT ภาษาไทยแบบเก่า (TIS-620) อ่านได้ ไม่เป็นภาษาต่างดาว
-- **PDF.** Pinch or double-tap to zoom. The Paper and Night themes recolour the pages too.
+- **PDF.** White page margins are trimmed automatically. On phones, PDFs scroll continuously at full width, because a printed page is much shorter than a tall phone screen. On tablets they turn page by page with the curl animation, two pages side by side in landscape. Pinch or double-tap to zoom. The Paper and Night themes recolour the pages too.
+  PDF ตัดขอบขาวอัตโนมัติ มือถือเลื่อนลงต่อเนื่องเต็มความกว้าง แท็บเล็ตพลิกทีละหน้า
 
 The app is fully offline. It has no internet permission, no account and no tracking.
 
@@ -53,6 +56,9 @@ You need JDK 17 and the Android SDK (compileSdk 35). The minimum Android version
 | Library storage | `data/LibraryRepository.kt` (`files/library.json`, one folder per book) |
 | EPUB/TXT rendering | `ui/reader/WebBookController.kt` + `assets/reader.js` |
 | PDF rendering | `ui/reader/PdfBook.kt` (Android `PdfRenderer`) + `PdfReader.kt` |
+| Page-turn animation | `ui/reader/PageCurl.kt` (fold renderer + state), `ReaderFrame` in `WebBookController.kt` |
+| Margins beside the camera cutout | `ui/reader/PageFrame.kt` |
+| Crayon bookshelf | `ui/library/Crayon.kt`, `LibraryScreen.kt` |
 | Controls and settings | `ui/reader/ReaderChrome.kt`, `ReaderSheets.kt` |
 | Full-screen handling | `MainActivity` (edge-to-edge, cutout mode), `util/Window.kt` (immersive bars) |
 

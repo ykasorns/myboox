@@ -15,7 +15,10 @@
   var S = init.settings || {};
   var target = init.target || { type: 'start' };
   var noop = function () {};
-  var bridge = window.Android || { onPage: noop, onTap: noop, onBoundary: noop, onLink: noop };
+  var bridge = window.Android || {};
+  ['onPage', 'onTap', 'onBoundary', 'onLink', 'onSelection'].forEach(function (name) {
+    if (typeof bridge[name] !== 'function') bridge[name] = noop;
+  });
 
   var root = document.documentElement;
   var page = 0;
@@ -85,7 +88,7 @@
     page = Math.max(0, Math.min(pageCount - 1, p));
     var left = page * viewW();
     var s = scroller();
-    if (smooth && typeof s.scrollTo === 'function') {
+    if (smooth && S.animate !== false && typeof s.scrollTo === 'function') {
       try { s.scrollTo({ left: left, top: 0, behavior: 'smooth' }); } catch (e) { s.scrollLeft = left; }
     } else {
       s.scrollLeft = left;
@@ -186,6 +189,18 @@
       userMoved = true;
       show(anchorPage(id), false);
     },
+    // Instant moves used by the native page-curl animation.
+    step: function (delta) {
+      userMoved = true;
+      var target = page + delta;
+      if (target < 0 || target > pageCount - 1) return 'boundary';
+      show(target, false);
+      return 'ok';
+    },
+    goTo: function (p) {
+      userMoved = true;
+      show(p, false);
+    },
     applySettings: function (s) {
       if (s) S = s;
       if (ready) layout(); else style.textContent = buildCss();
@@ -231,7 +246,8 @@
     if (!touch.axis && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
       touch.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
     }
-    if (touch.axis === 'x') {
+    // With the page-curl animation the app handles horizontal drags itself.
+    if (touch.axis === 'x' && S.swipe !== false) {
       if (e.cancelable) e.preventDefault();
       scroller().scrollLeft = touch.scroll - dx;
     }
@@ -244,7 +260,7 @@
     var dt = Date.now() - touch.time;
     var axis = touch.axis;
     touch = null;
-    if (axis === 'x') {
+    if (axis === 'x' && S.swipe !== false) {
       var w = viewW();
       if (dx < -w * 0.12 || (dx < -30 && dt < 250)) api.next();
       else if (dx > w * 0.12 || (dx > 30 && dt < 250)) api.prev();
@@ -255,9 +271,19 @@
   }, { passive: true });
 
   document.addEventListener('touchcancel', function () {
-    if (touch && touch.axis === 'x') show(page, true);
+    if (touch && touch.axis === 'x' && S.swipe !== false) show(page, true);
     touch = null;
   }, { passive: true });
+
+  var selecting = false;
+  document.addEventListener('selectionchange', function () {
+    var sel = window.getSelection ? window.getSelection() : null;
+    var now = !!(sel && !sel.isCollapsed);
+    if (now !== selecting) {
+      selecting = now;
+      bridge.onSelection(now);
+    }
+  });
 
   // ---- Links: in-chapter anchors are handled here, everything else goes to the app ------
 
