@@ -28,12 +28,14 @@ The app is fully offline. It has no internet permission, no account and no track
 
 ## Install / ติดตั้ง
 
-1. Open the repository on GitHub and go to **Actions → Build APK**. Open the latest successful run.
-   เข้า GitHub → แท็บ **Actions** → **Build APK** → เลือก run ล่าสุดที่ผ่าน (เครื่องหมายถูกสีเขียว)
-2. Download the **ebook-reader-apk** artifact (a zip file) and unzip it to get `app-release.apk`.
-   ดาวน์โหลด **ebook-reader-apk** แล้วแตกไฟล์ zip จะได้ `app-release.apk`
-3. Copy the APK to the Android device and open it. Allow "Install unknown apps" when Android asks.
-   ส่งไฟล์ APK เข้ามือถือ/แท็บเล็ต แล้วกดติดตั้ง (อนุญาต "ติดตั้งแอปที่ไม่รู้จัก" ถ้าระบบถาม)
+1. On the Android device, open **https://github.com/ykasorns/myboox/releases/latest** in the browser (Chrome) and sign in to GitHub if asked.
+   เปิดลิงก์ด้านบนในเบราว์เซอร์บนมือถือ (ล็อกอิน GitHub ถ้าระบบถาม)
+2. Under **Assets**, tap `myboox-reader-<number>.apk` to download it.
+   ใต้หัวข้อ **Assets** กดไฟล์ `myboox-reader-<เลข>.apk` เพื่อดาวน์โหลด
+3. Open the downloaded file and allow "Install unknown apps" when Android asks. Installing over an older build keeps your books.
+   เปิดไฟล์ที่โหลดมาแล้วกดติดตั้ง ติดตั้งทับเวอร์ชันเก่าได้เลย หนังสือไม่หาย
+
+Every push to `main` publishes a new release. The GitHub mobile app cannot download build artifacts, so use the release link instead.
 
 The APK is signed with a debug key, which is fine for installing on your own devices. Use a real signing key before you publish it to Google Play.
 
