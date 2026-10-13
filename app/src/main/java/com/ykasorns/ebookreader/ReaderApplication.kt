@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import com.ykasorns.ebookreader.data.LibraryRepository
 import com.ykasorns.ebookreader.data.SettingsRepository
+import com.ykasorns.ebookreader.export.BookExporter
 import com.ykasorns.ebookreader.importer.BookImporter
 
 class ReaderApplication : Application() {
@@ -21,11 +22,14 @@ object AppGraph {
         private set
     lateinit var importer: BookImporter
         private set
+    lateinit var exporter: BookExporter
+        private set
 
     fun init(context: Context) {
         val app = context.applicationContext
         library = LibraryRepository(app)
         settings = SettingsRepository(app)
         importer = BookImporter(app, library)
+        exporter = BookExporter(app, library)
     }
 }

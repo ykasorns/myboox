@@ -41,7 +41,7 @@ jobs:
       # not downloadable from the GitHub mobile app) do not.
       - name: Name APK
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: cp app/build/outputs/apk/release/app-release.apk myboox-reader-${{ github.run_number }}.apk
+        run: cp app/build/outputs/apk/release/app-release.apk myboox-${{ github.run_number }}.apk
 
       - name: Publish release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -49,10 +49,10 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           target_commitish: ${{ github.sha }}
-          name: Reader build ${{ github.run_number }}
+          name: Myboox build ${{ github.run_number }}
           body: |
             Built from ${{ github.sha }}.
             Download the .apk below on your Android device and open it to install.
             ดาวน์โหลดไฟล์ .apk ด้านล่างบนเครื่อง Android แล้วเปิดเพื่อติดตั้ง
-          files: myboox-reader-${{ github.run_number }}.apk
+          files: myboox-${{ github.run_number }}.apk
           make_latest: true

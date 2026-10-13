@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -58,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,7 +77,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.util.Log
+import com.ykasorns.ebookreader.AppGraph
 import com.ykasorns.ebookreader.R
+import com.ykasorns.ebookreader.export.BookExporter
+import com.ykasorns.ebookreader.util.findActivity
+import kotlinx.coroutines.launch
 import com.ykasorns.ebookreader.data.Book
 import com.ykasorns.ebookreader.data.BookFormat
 import com.ykasorns.ebookreader.data.LibrarySort
@@ -106,6 +113,55 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpen: (Book) -> Unit) {
     var pendingRemoval by remember { mutableStateOf<Book?>(null) }
     var editing by remember { mutableStateOf<Book?>(null) }
     var addingTo by remember { mutableStateOf<Book?>(null) }
+    var exporting by remember { mutableStateOf<Book?>(null) }
+    var exportBusy by remember { mutableStateOf(false) }
+    var savingFile by remember { mutableStateOf<java.io.File?>(null) }
+    val scope = rememberCoroutineScope()
+    val exporter = AppGraph.exporter
+    val activity = context.findActivity()
+    fun exportFailed(e: Exception) {
+        Log.w("LibraryScreen", "Export failed", e)
+        scope.launch { snackbar.showSnackbar(context.getString(R.string.export_failed)) }
+    }
+    fun onSaveTarget(uri: android.net.Uri?) {
+        val file = savingFile
+        savingFile = null
+        if (uri != null && file != null) {
+            scope.launch {
+                try {
+                    exporter.copyTo(file, uri)
+                    snackbar.showSnackbar(context.getString(R.string.export_saved))
+                } catch (e: Exception) {
+                    exportFailed(e)
+                }
+            }
+        }
+    }
+    val saveEpub = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(BookExporter.Kind.EPUB.mimeType),
+    ) { onSaveTarget(it) }
+    val savePdf = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(BookExporter.Kind.PDF.mimeType),
+    ) { onSaveTarget(it) }
+    fun runExport(book: Book, kind: BookExporter.Kind, save: Boolean) {
+        exporting = null
+        scope.launch {
+            exportBusy = true
+            try {
+                val file = exporter.export(book, kind)
+                if (save) {
+                    savingFile = file
+                    (if (kind == BookExporter.Kind.EPUB) saveEpub else savePdf).launch(file.name)
+                } else if (activity != null) {
+                    exporter.share(activity, file, kind, book.title)
+                }
+            } catch (e: Exception) {
+                exportFailed(e)
+            } finally {
+                exportBusy = false
+            }
+        }
+    }
     val nameRequest by viewModel.nameRequest.collectAsStateWithLifecycle()
     val markdownChoice by viewModel.markdownChoice.collectAsStateWithLifecycle()
 
@@ -176,13 +232,40 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpen: (Book) -> Unit) {
                             addingTo = book
                             episodePicker.launch(markdownMimeTypes)
                         },
+                        onExport = { exporting = it },
                     ),
                 )
             }
-            if (importing > 0) {
+            if (importing > 0 || exportBusy) {
                 LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
             }
         }
+    }
+
+    exporting?.let { book ->
+        ExportDialog(
+            book = book,
+            canEpub = exporter.canExportEpub(book),
+            onEpub = { save -> runExport(book, BookExporter.Kind.EPUB, save) },
+            onPdf = { save ->
+                if (book.format == BookFormat.PDF) {
+                    runExport(book, BookExporter.Kind.PDF, save)
+                } else if (activity != null) {
+                    exporting = null
+                    scope.launch {
+                        exportBusy = true
+                        try {
+                            exporter.print(activity, book)
+                        } catch (e: Exception) {
+                            exportFailed(e)
+                        } finally {
+                            exportBusy = false
+                        }
+                    }
+                }
+            },
+            onDismiss = { exporting = null },
+        )
     }
 
     markdownChoice?.let { choice ->
@@ -489,6 +572,7 @@ private class BookActions(
     val onRemove: (Book) -> Unit,
     val onEdit: (Book) -> Unit,
     val onAddEpisodes: (Book) -> Unit,
+    val onExport: (Book) -> Unit,
 )
 
 private val markdownMimeTypes = arrayOf(
@@ -522,6 +606,14 @@ private fun ShelfCover(book: Book, width: Dp, height: Dp, onOpen: () -> Unit, ac
                     },
                 )
             }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.export_book)) },
+                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                onClick = {
+                    menu = false
+                    actions.onExport(book)
+                },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.edit_book)) },
                 leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
@@ -668,4 +760,56 @@ private fun EditBookDialog(book: Book, isNew: Boolean, onSave: (String, String) 
         confirmButton = { TextButton(onClick = { onSave(title, author) }) { Text(stringResource(R.string.save)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
+}
+
+@Composable
+private fun ExportDialog(
+    book: Book,
+    canEpub: Boolean,
+    onEpub: (save: Boolean) -> Unit,
+    onPdf: (save: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.export_title, book.title), maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                if (canEpub) {
+                    ExportOption(
+                        name = "EPUB",
+                        description = stringResource(R.string.export_epub_body),
+                        actions = {
+                            TextButton(onClick = { onEpub(false) }) { Text(stringResource(R.string.share)) }
+                            TextButton(onClick = { onEpub(true) }) { Text(stringResource(R.string.save_to_device)) }
+                        },
+                    )
+                }
+                ExportOption(
+                    name = "PDF",
+                    description = stringResource(
+                        if (book.format == BookFormat.PDF) R.string.export_pdf_original_body else R.string.export_pdf_body,
+                    ),
+                    actions = {
+                        if (book.format == BookFormat.PDF) {
+                            TextButton(onClick = { onPdf(false) }) { Text(stringResource(R.string.share)) }
+                            TextButton(onClick = { onPdf(true) }) { Text(stringResource(R.string.save_to_device)) }
+                        } else {
+                            TextButton(onClick = { onPdf(false) }) { Text(stringResource(R.string.make_pdf)) }
+                        }
+                    },
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+@Composable
+private fun ExportOption(name: String, description: String, actions: @Composable () -> Unit) {
+    Column {
+        Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { actions() }
+    }
 }

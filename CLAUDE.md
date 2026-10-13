@@ -1,11 +1,11 @@
 # CLAUDE.md
 
-Android ebook reader (EPUB, PDF, TXT) written in Kotlin + Jetpack Compose. The goal is a simple reading experience like Books on iPad mini, with true edge-to-edge pages and support for phones, tablets and foldables. See `README.md` for features and the source layout.
+Myboox: an Android ebook reader (EPUB, PDF, TXT, Markdown, HTML) written in Kotlin + Jetpack Compose. The package id stays `com.ykasorns.ebookreader` so updates install over earlier builds. The goal is a simple reading experience like Books on iPad mini, with true edge-to-edge pages and support for phones, tablets and foldables. See `README.md` for features and the source layout.
 
 ## Commands
 
 ```bash
-./gradlew assembleRelease   # release APK (signed with the debug key) → app/build/outputs/apk/release/
+./gradlew assembleRelease   # release APK, signed with signing/myboox-release.jks → app/build/outputs/apk/release/
 ./gradlew assembleDebug
 ./gradlew installDebug      # install on a connected device
 ```

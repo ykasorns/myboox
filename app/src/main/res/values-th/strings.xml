@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Reader</string>
+    <string name="app_name">Myboox</string>
 
     <string name="library_title">คลังหนังสือ</string>
     <string name="add_books">เพิ่มหนังสือ</string>
@@ -78,4 +78,14 @@
     <plurals name="markdown_files_received">
         <item quantity="other">ไฟล์ Markdown %1$d ไฟล์ แตะชื่อหนังสือเพื่อเพิ่มเป็นตอนใหม่ หรือสร้างเล่มใหม่</item>
     </plurals>
+    <string name="export_book">แชร์ / ส่งออก</string>
+    <string name="export_title">แชร์ “%1$s”</string>
+    <string name="export_epub_body">สำหรับ Apple Books, Google Play Books, Kindle และแอปอ่าน ebook ทั่วไป ตัวหนังสือปรับตามจอได้</string>
+    <string name="export_pdf_body">หน้าตาเหมือนกันทุกเครื่อง เหมาะกับการพิมพ์ จะเปิดหน้าจอพิมพ์ ให้เลือก “บันทึกเป็น PDF” และขนาดกระดาษที่นั่น</string>
+    <string name="export_pdf_original_body">ไฟล์ PDF ต้นฉบับ</string>
+    <string name="share">แชร์</string>
+    <string name="save_to_device">บันทึกลงเครื่อง</string>
+    <string name="make_pdf">สร้าง PDF</string>
+    <string name="export_saved">บันทึกแล้ว</string>
+    <string name="export_failed">ส่งออกหนังสือเล่มนี้ไม่ได้</string>
 </resources>

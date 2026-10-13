@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Reader</string>
+    <string name="app_name">Myboox</string>
 
     <string name="library_title">Library</string>
     <string name="add_books">Add books</string>
@@ -79,4 +79,14 @@
         <item quantity="one">%1$d Markdown file. Add it as an episode of a book on your shelf, or make a new book.</item>
         <item quantity="other">%1$d Markdown files. Add them as episodes of a book on your shelf, or make a new book.</item>
     </plurals>
+    <string name="export_book">Share / export</string>
+    <string name="export_title">Share “%1$s”</string>
+    <string name="export_epub_body">For Apple Books, Google Play Books, Kindle and other ebook apps. Text adjusts to every screen.</string>
+    <string name="export_pdf_body">Looks the same everywhere and suits printing. Opens the print screen: choose “Save as PDF” and the paper size there.</string>
+    <string name="export_pdf_original_body">The original PDF file.</string>
+    <string name="share">Share</string>
+    <string name="save_to_device">Save to device</string>
+    <string name="make_pdf">Make PDF</string>
+    <string name="export_saved">Saved</string>
+    <string name="export_failed">Couldn\'t export this book.</string>
 </resources>

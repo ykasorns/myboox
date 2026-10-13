@@ -1,4 +1,4 @@
-# Reader — Android ebook reader
+# Myboox — Android ebook reader
 
 A simple Android ebook reader modelled on Books on iPad mini. It supports EPUB, PDF, TXT, Markdown (.md) and HTML, and it works on phones, tablets and foldables.
 
@@ -25,6 +25,8 @@ A simple Android ebook reader modelled on Books on iPad mini. It supports EPUB, 
   เขียนแยกไฟล์ทีละตอนได้ เลือกหลายไฟล์พร้อมกันจะรวมเป็นเล่มเดียว และกดค้างที่หนังสือเพื่อ "เพิ่มตอน" ภายหลังได้
 - **A zip of episodes.** A `.zip` holding the `.md` files (folders are fine) becomes one book named after the zip file. Images the episodes link to (`![](images/map.png)`) are shown, and a `cover.jpg`/`cover.png` becomes the cover. Zipping everything again later and adding it to the same book updates edited episodes and adds new ones. Zips made on Windows with Thai file names work too.
   zip ทุกตอนมาไฟล์เดียวได้ ชื่อไฟล์ zip เป็นชื่อหนังสือ รูปในเรื่องแสดงได้ และ cover.jpg เป็นปก
+- **Share your book with others.** Long-press a book → **Share / export**. **EPUB** (validated with EPUBCheck) opens in Apple Books, Google Play Books, Kindle (via Send to Kindle) and other ebook apps, with cover, contents, title and author. You can share it straight to LINE, Gmail or Drive, or save it to the device. **PDF** goes through Android's print screen: choose "Save as PDF" and a paper size (A5 by default). Each chapter starts on a new page, and the text stays real, sharp text.
+  แชร์หนังสือให้คนอื่นอ่าน ส่งออกเป็น EPUB หรือ PDF ได้
 - **Thai TXT files.** Legacy TIS-620 / Windows-874 files are detected automatically.
   ไฟล์ TXT ภาษาไทยแบบเก่า (TIS-620) อ่านได้ ไม่เป็นภาษาต่างดาว
 - **PDF.** White page margins are trimmed automatically. On phones, PDFs scroll continuously at full width, because a printed page is much shorter than a tall phone screen. On tablets they turn page by page with the curl animation, two pages side by side in landscape. Pinch or double-tap to zoom. The Paper and Night themes recolour the pages too.
@@ -36,8 +38,8 @@ The app is fully offline. It has no internet permission, no account and no track
 
 1. On the Android device, open **https://github.com/ykasorns/myboox/releases/latest** in the browser (Chrome) and sign in to GitHub if asked.
    เปิดลิงก์ด้านบนในเบราว์เซอร์บนมือถือ (ล็อกอิน GitHub ถ้าระบบถาม)
-2. Under **Assets**, tap `myboox-reader-<number>.apk` to download it.
-   ใต้หัวข้อ **Assets** กดไฟล์ `myboox-reader-<เลข>.apk` เพื่อดาวน์โหลด
+2. Under **Assets**, tap `myboox-<number>.apk` to download it.
+   ใต้หัวข้อ **Assets** กดไฟล์ `myboox-<เลข>.apk` เพื่อดาวน์โหลด
 3. Open the downloaded file and allow "Install unknown apps" when Android asks. Installing over an older build keeps your books.
    เปิดไฟล์ที่โหลดมาแล้วกดติดตั้ง ติดตั้งทับเวอร์ชันเก่าได้เลย หนังสือไม่หาย
 
@@ -66,6 +68,7 @@ You need JDK 17 and the Android SDK (compileSdk 35). The minimum Android version
 | PDF rendering | `ui/reader/PdfBook.kt` (Android `PdfRenderer`) + `PdfReader.kt` |
 | Page-turn animation | `ui/reader/PageCurl.kt` (fold renderer + state), `ReaderFrame` in `WebBookController.kt` |
 | Margins beside the camera cutout | `ui/reader/PageFrame.kt` |
+| Export (EPUB, PDF via printing) | `export/EpubWriter.kt`, `export/BookExporter.kt` |
 | Crayon bookshelf | `ui/library/Crayon.kt`, `LibraryScreen.kt` |
 | Controls and settings | `ui/reader/ReaderChrome.kt`, `ReaderSheets.kt` |
 | Full-screen handling | `MainActivity` (edge-to-edge, cutout mode), `util/Window.kt` (immersive bars) |
