@@ -108,6 +108,7 @@ fun WebBookReader(book: Book, settings: ReaderSettings, chrome: ReaderChromeStat
             curl.mode = settings.pageTurn
             curl.spread = spread
             curl.paperColor = background
+            curl.liveBehind = true
             controller.applyStyle(styleJson, background)
         }
 
@@ -119,14 +120,17 @@ fun WebBookReader(book: Book, settings: ReaderSettings, chrome: ReaderChromeStat
         PageCurlOverlay(curl)
 
         val label = { fraction: Float -> "${(fraction * 100).roundToInt()}%" }
+        // While a page turns, the title and page number are part of the snapshot that moves
+        // with the paper, so the live ones are hidden.
+        val turning = curl.active
         ReaderChrome(
             visible = chrome.controlsVisible,
             theme = settings.theme,
             title = book.title,
             header = chapterTitles.getOrNull(controller.chapter) ?: book.title,
-            headerPlacement = frame.header,
+            headerPlacement = frame.header.takeUnless { turning },
             footer = stringResource(R.string.page_of, (controller.page + 1).toString(), controller.pageCount),
-            footerBottom = frame.footerBottom,
+            footerBottom = frame.footerBottom.takeUnless { turning },
             progress = controller.progress,
             sliderLabel = label,
             onSeek = controller::seek,

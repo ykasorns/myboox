@@ -5,13 +5,14 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.PixelCopy
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
@@ -33,6 +34,7 @@ import androidx.webkit.WebViewFeature
 import com.ykasorns.ebookreader.data.LibraryRepository
 import com.ykasorns.ebookreader.data.PageTurn
 import com.ykasorns.ebookreader.data.WebManifest
+import com.ykasorns.ebookreader.util.findActivity
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -225,20 +227,21 @@ class WebBookController(
 
     // ---- Page curl ---------------------------------------------------------------------------
     //
-    // A turn works on snapshots: the current page is captured, the WebView moves to the
-    // neighbouring page underneath the overlay, that page is captured too, and the overlay
-    // animates between the two images. If the turn is abandoned the WebView moves back.
+    // A turn works on one snapshot: the current page is copied from the screen, the overlay
+    // shows that copy, and the WebView moves to the neighbouring page underneath it. The overlay
+    // leaves the area of the neighbouring page transparent, so the live WebView shows through
+    // there. If the turn is abandoned the WebView moves back before the overlay goes away.
+    //
+    // The snapshot comes from the window (PixelCopy) rather than WebView.draw(), which renders
+    // blank pages on many devices.
 
     private var turning = false
     private var turnToken = 0
     private var lastTurnActivity = 0L
-    private var turnForward = true
     private var chapterBefore = 0
     private var pageBefore = 0
     private var pageCountBefore = 1
-    private var neighbour: Bitmap? = null
     private var onChapterReady: (() -> Unit)? = null
-    private val buffers = arrayOfNulls<Bitmap>(2)
 
     override val isTurning: Boolean get() = turning
 
@@ -246,125 +249,141 @@ class WebBookController(
 
     private fun atEnd() = chapter == lastChapter && page >= pageCount - 1
 
-    private fun capture(slot: Int): Bitmap? {
-        val view = webView ?: return null
-        if (view.width <= 0 || view.height <= 0) return null
-        var bitmap = buffers[slot]
-        if (bitmap == null || bitmap.width != view.width || bitmap.height != view.height) {
-            bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-            buffers[slot] = bitmap
+    /** Copies what is on screen over the WebView, header and page number included. */
+    private fun captureScreen(onCaptured: (Bitmap?) -> Unit) {
+        val view = webView
+        val window = frame?.context?.findActivity()?.window
+        if (view == null || window == null || view.width <= 0 || view.height <= 0) {
+            onCaptured(null)
+            return
         }
-        bitmap.eraseColor(backgroundColor)
-        view.draw(Canvas(bitmap))
-        return bitmap
-    }
-
-    /** Captures the WebView once the page it was just told to show has really been drawn. */
-    private fun captureWhenDrawn(token: Int, slot: Int, onCaptured: (Bitmap?) -> Unit) {
-        val view = webView ?: return
-        view.postVisualStateCallback(token.toLong(), object : WebView.VisualStateCallback() {
-            override fun onComplete(requestId: Long) {
-                view.postOnAnimation {
-                    view.postOnAnimation {
-                        if (token == turnToken) onCaptured(capture(slot))
-                    }
-                }
-            }
-        })
+        val location = IntArray(2)
+        view.getLocationInWindow(location)
+        val source = Rect(location[0], location[1], location[0] + view.width, location[1] + view.height)
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        try {
+            PixelCopy.request(window, source, bitmap, { result ->
+                onCaptured(if (result == PixelCopy.SUCCESS) bitmap else null)
+            }, main)
+        } catch (e: IllegalArgumentException) {
+            onCaptured(null)
+        }
     }
 
     /**
-     * Prepares a turn: shows the current page in the overlay and moves the WebView to the
-     * neighbouring page. [onNeighbour] receives the neighbouring page's image.
+     * Starts a turn: snapshots the current page, lets [show] put it in the overlay, then moves
+     * the WebView to the neighbouring page. [onReady] runs once the neighbouring page is drawn.
      */
-    private fun prepareTurn(forward: Boolean, show: (current: Bitmap) -> Unit, onNeighbour: (Bitmap?) -> Unit): Boolean {
+    private fun prepareTurn(forward: Boolean, show: (current: Bitmap) -> Unit, onReady: () -> Unit): Boolean {
         if (turning || webView == null) return false
         if (if (forward) atEnd() else atStart()) return false
-        val current = capture(0) ?: return false
         turning = true
         val token = ++turnToken
-        turnForward = forward
         chapterBefore = chapter
         pageBefore = page
         pageCountBefore = pageCount
-        neighbour = null
-        show(current)
         lastTurnActivity = SystemClock.uptimeMillis()
         main.postDelayed({ checkStuck(token) }, STUCK_TURN_MS)
-        scope.launch {
-            // Let the overlay reach the screen before the WebView changes underneath it.
-            withFrameNanos { }
-            withFrameNanos { }
-            if (token != turnToken) return@launch
-            webView?.evaluateJavascript("window.reader?reader.step(${if (forward) 1 else -1}):'missing'") { result ->
-                if (token != turnToken) return@evaluateJavascript
-                when (result) {
-                    "\"ok\"" -> captureWhenDrawn(token, 1) { bitmap ->
-                        neighbour = bitmap
-                        onNeighbour(bitmap)
+        captureScreen { current ->
+            if (token != turnToken) return@captureScreen
+            if (current == null) {
+                // No snapshot: turn the page without the animation.
+                endTurn()
+                js(if (forward) "window.reader&&reader.next()" else "window.reader&&reader.prev()")
+                return@captureScreen
+            }
+            show(current)
+            scope.launch {
+                // Let the overlay reach the screen before the WebView changes underneath it.
+                withFrameNanos { }
+                withFrameNanos { }
+                if (token != turnToken) return@launch
+                webView?.evaluateJavascript("window.reader?reader.step(${if (forward) 1 else -1}):'missing'") { result ->
+                    if (token != turnToken) return@evaluateJavascript
+                    when (result) {
+                        "\"ok\"" -> whenDrawn(token, onReady)
+                        "\"boundary\"" -> {
+                            onChapterReady = { whenDrawn(token, onReady) }
+                            if (forward) openChapter(chapter + 1, TARGET_START) else openChapter(chapter - 1, TARGET_END)
+                        }
+                        else -> onReady()
                     }
-                    "\"boundary\"" -> {
-                        onChapterReady = { captureWhenDrawn(token, 1) { bitmap -> neighbour = bitmap; onNeighbour(bitmap) } }
-                        if (forward) openChapter(chapter + 1, TARGET_START) else openChapter(chapter - 1, TARGET_END)
-                    }
-                    else -> onNeighbour(null)
                 }
             }
         }
         return true
     }
 
-    override fun beginDrag(forward: Boolean, x: Float, y: Float): Boolean = prepareTurn(
-        forward,
-        show = { current ->
+    private fun whenDrawn(token: Int, action: () -> Unit) {
+        val view = webView ?: return action()
+        view.postVisualStateCallback(token.toLong(), object : WebView.VisualStateCallback() {
+            override fun onComplete(requestId: Long) {
+                if (token == turnToken) action()
+            }
+        })
+    }
+
+    private var dragX = Float.NaN
+    private var dragY = Float.NaN
+    private var pendingRelease: Float? = null
+
+    // A null page in the overlay is a transparent hole onto the live WebView.
+    override fun beginDrag(forward: Boolean, x: Float, y: Float): Boolean {
+        dragX = Float.NaN
+        pendingRelease = null
+        return prepareTurn(forward, show = { current ->
             if (forward) curl.begin(true, x, y, front = current, under = null) else curl.begin(false, x, y, front = null, under = current)
-        },
-        onNeighbour = { other ->
-            if (forward) curl.setBitmaps(front = buffers[0], under = other) else curl.setBitmaps(front = other, under = buffers[0])
-        },
-    )
+            // Catch up with the finger, which kept moving while the snapshot was taken.
+            if (dragX.isFinite()) curl.drag(dragX, dragY)
+            pendingRelease?.let { velocity ->
+                pendingRelease = null
+                curl.release(velocity) { navigated -> finishTurn(navigated) }
+            }
+        }, onReady = {})
+    }
 
     override fun drag(x: Float, y: Float) {
         lastTurnActivity = SystemClock.uptimeMillis()
+        dragX = x
+        dragY = y
         curl.drag(x, y)
     }
 
     override fun release(velocityX: Float) {
         lastTurnActivity = SystemClock.uptimeMillis()
+        if (!curl.active) {
+            // Let go before the snapshot was ready: the WebView may already be moving.
+            pendingRelease = velocityX
+            return
+        }
         curl.release(velocityX) { navigated -> finishTurn(navigated) }
     }
 
     private fun autoTurn(forward: Boolean) {
         var started = false
+        var current: Bitmap? = null
         val token = turnToken + 1
-        val begun = prepareTurn(
-            forward,
-            show = { current ->
-                // Hold the current page on screen until the other page is ready, then turn.
-                curl.begin(forward, 0f, 0f, front = current, under = current)
-                curl.setBitmaps(front = current, under = current)
-            },
-            onNeighbour = { other ->
-                if (!started && token == turnToken) {
-                    started = true
-                    val current = buffers[0]
-                    if (forward) {
-                        curl.auto(true, front = current, under = other) { navigated -> finishTurn(navigated) }
-                    } else {
-                        curl.auto(false, front = other, under = current) { navigated -> finishTurn(navigated) }
-                    }
-                }
-            },
-        )
-        if (!begun) return
-        // Never leave the reader stuck if the neighbouring page is slow to appear.
-        main.postDelayed({
+        val start = {
             if (!started && token == turnToken && turning) {
                 started = true
-                val current = buffers[0]
-                if (forward) curl.auto(true, current, neighbour) { finishTurn(it) } else curl.auto(false, neighbour, current) { finishTurn(it) }
+                if (forward) {
+                    curl.auto(true, front = current, under = null) { navigated -> finishTurn(navigated) }
+                } else {
+                    curl.auto(false, front = null, under = current) { navigated -> finishTurn(navigated) }
+                }
             }
-        }, 700)
+        }
+        prepareTurn(
+            forward,
+            show = { snapshot ->
+                current = snapshot
+                // Hold the current page on screen until the other page is ready, then turn.
+                curl.begin(forward, 0f, 0f, front = snapshot, under = snapshot)
+                // Never leave the reader waiting if the neighbouring page is slow to appear.
+                main.postDelayed({ start() }, 700)
+            },
+            onReady = { start() },
+        )
     }
 
     private fun finishTurn(navigated: Boolean) {
@@ -403,7 +422,7 @@ class WebBookController(
     private fun endTurn() {
         turnToken++
         onChapterReady = null
-        neighbour = null
+        pendingRelease = null
         curl.end()
         turning = false
     }

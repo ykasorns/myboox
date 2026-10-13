@@ -61,6 +61,12 @@ class PageCurlState(private val scope: CoroutineScope) {
     var spread = false
     var paperColor = android.graphics.Color.WHITE
 
+    /**
+     * When true a missing (null) page is left transparent, so the live view under the overlay
+     * shows through; otherwise it is drawn as blank paper.
+     */
+    var liveBehind = false
+
     /** Size of the overlay in pixels, set when it is laid out. */
     var width = 0f
     var height = 0f
@@ -164,8 +170,8 @@ class PageCurlState(private val scope: CoroutineScope) {
     internal fun draw(canvas: NativeCanvas) {
         if (!active || width <= 0f || height <= 0f) return
         when (mode) {
-            PageTurn.CURL -> renderer.drawCurl(canvas, width, height, front, under, fx, fy, grabY, spread, paperColor)
-            else -> renderer.drawSlide(canvas, width, height, front, under, turned, paperColor)
+            PageTurn.CURL -> renderer.drawCurl(canvas, width, height, front, under, fx, fy, grabY, spread, paperColor, liveBehind)
+            else -> renderer.drawSlide(canvas, width, height, front, under, turned, paperColor, liveBehind)
         }
     }
 }
@@ -210,24 +216,24 @@ class PageCurlRenderer {
     private val path = Path()
     private val screen = RectF()
 
-    private fun drawPage(canvas: NativeCanvas, bitmap: Bitmap?, w: Float, h: Float, paper: Int) {
+    private fun drawPage(canvas: NativeCanvas, bitmap: Bitmap?, w: Float, h: Float, paper: Int, live: Boolean = false) {
         screen.set(0f, 0f, w, h)
         if (bitmap != null && !bitmap.isRecycled) {
             canvas.drawBitmap(bitmap, null, screen, bitmapPaint)
-        } else {
+        } else if (!live) {
             fillPaint.color = paper
             canvas.drawRect(screen, fillPaint)
         }
     }
 
-    fun drawSlide(canvas: NativeCanvas, w: Float, h: Float, front: Bitmap?, under: Bitmap?, turned: Float, paper: Int) {
+    fun drawSlide(canvas: NativeCanvas, w: Float, h: Float, front: Bitmap?, under: Bitmap?, turned: Float, paper: Int, live: Boolean) {
         canvas.save()
         canvas.translate((1f - turned) * w, 0f)
-        drawPage(canvas, under, w, h, paper)
+        drawPage(canvas, under, w, h, paper, live)
         canvas.restore()
         canvas.save()
         canvas.translate(-turned * w, 0f)
-        drawPage(canvas, front, w, h, paper)
+        drawPage(canvas, front, w, h, paper, live)
         canvas.restore()
     }
 
@@ -242,6 +248,7 @@ class PageCurlRenderer {
         grabY: Float,
         spread: Boolean,
         paper: Int,
+        live: Boolean,
     ) {
         val spine = if (spread) w / 2f else 0f
         val pw = if (spread) w / 2f else w
@@ -291,7 +298,7 @@ class PageCurlRenderer {
         val vy = gy - fy
         val len = hypot(vx, vy)
         if (len < 0.5f) {
-            drawPage(canvas, front, w, h, paper)
+            drawPage(canvas, front, w, h, paper, live)
             return
         }
         val nx = vx / len
@@ -315,13 +322,18 @@ class PageCurlRenderer {
         val shadowWidth = min(len * 0.35f, 60f)
 
         // The other half of a two-page spread stays as it is until the flap lands on it.
-        if (spread) drawPage(canvas, front, w, h, paper)
+        if (spread) {
+            canvas.save()
+            canvas.clipRect(0f, 0f, spine, h)
+            drawPage(canvas, front, w, h, paper, live)
+            canvas.restore()
+        }
 
         // Next page, revealed where the paper has lifted, with a soft shadow along the fold.
         if (folded.size >= 6) {
             canvas.save()
             canvas.clipPath(polygon(folded))
-            drawPage(canvas, under, w, h, paper)
+            drawPage(canvas, under, w, h, paper, live)
             shade(canvas, mx, my, mx + nx * shadowWidth, my + ny * shadowWidth, intArrayOf(0x59000000, 0))
             canvas.restore()
         }
@@ -330,7 +342,7 @@ class PageCurlRenderer {
         if (flat.size >= 6) {
             canvas.save()
             canvas.clipPath(polygon(flat))
-            drawPage(canvas, front, w, h, paper)
+            drawPage(canvas, front, w, h, paper, live)
             shade(canvas, mx, my, mx - nx * shadowWidth * 0.6f, my - ny * shadowWidth * 0.6f, intArrayOf(0x33000000, 0))
             canvas.restore()
         }
@@ -350,7 +362,8 @@ class PageCurlRenderer {
             } else {
                 drawPage(canvas, front, w, h, paper)
                 fillPaint.color = paper
-                fillPaint.alpha = 220
+                // A live page has no image for its back: plain paper.
+                fillPaint.alpha = if (front == null) 255 else 220
                 canvas.drawRect(spine, 0f, spine + pw, h, fillPaint)
                 fillPaint.alpha = 255
             }
