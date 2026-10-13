@@ -73,4 +73,9 @@
     <string name="save">บันทึก</string>
     <string name="episodes_added">เพิ่มแล้ว %1$d ตอน</string>
     <string name="episodes_failed">เพิ่มตอนไม่ได้ ลองนำเข้าเล่มนี้ใหม่อีกครั้ง</string>
+    <string name="add_to_which_book">เพิ่มเข้าเล่มไหน</string>
+    <string name="new_book">สร้างเล่มใหม่</string>
+    <plurals name="markdown_files_received">
+        <item quantity="other">ไฟล์ Markdown %1$d ไฟล์ แตะชื่อหนังสือเพื่อเพิ่มเป็นตอนใหม่ หรือสร้างเล่มใหม่</item>
+    </plurals>
 </resources>

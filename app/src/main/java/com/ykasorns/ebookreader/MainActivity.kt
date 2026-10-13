@@ -53,12 +53,21 @@ class MainActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean =
         VolumeKeys.handle(event) || super.dispatchKeyEvent(event)
 
+    /** Some apps put shared files only in the clip data. */
+    private fun clipUris(intent: Intent): List<Uri> {
+        val clip = intent.clipData ?: return emptyList()
+        return (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+    }
+
     private fun handleIntent(intent: Intent?) {
         val uris = when (intent?.action) {
             Intent.ACTION_VIEW -> listOfNotNull(intent.data)
             Intent.ACTION_SEND -> listOfNotNull(
                 IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java),
             )
+            Intent.ACTION_SEND_MULTIPLE ->
+                IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+                    .ifEmpty { clipUris(intent) }
             else -> emptyList()
         }
         if (uris.isNotEmpty()) incoming.value = uris

@@ -53,6 +53,12 @@ class LibraryViewModel : ViewModel() {
     private val _importing = MutableStateFlow(0)
     val importing: StateFlow<Int> = _importing.asStateFlow()
 
+    /** Markdown files waiting for the reader to choose: new book, or episodes of an existing one. */
+    class MarkdownChoice(val uris: List<Uri>, val books: List<Book>)
+
+    private val _markdownChoice = MutableStateFlow<MarkdownChoice?>(null)
+    val markdownChoice: StateFlow<MarkdownChoice?> = _markdownChoice.asStateFlow()
+
     /** A book that was just created from several files and should be given a proper name. */
     private val _nameRequest = MutableStateFlow<Book?>(null)
     val nameRequest: StateFlow<Book?> = _nameRequest.asStateFlow()
@@ -67,7 +73,34 @@ class LibraryViewModel : ViewModel() {
 
     fun import(uris: List<Uri>, onImported: (Book) -> Unit = {}) {
         if (uris.isEmpty()) return
-        // Several Markdown files picked together are episodes of one book.
+        if (importer.allMarkdown(uris)) {
+            // New episodes usually belong to a book that is already on the shelf: ask first.
+            val books = library.books.value.filter { importer.canAddEpisodes(it) }
+                .sortedByDescending { maxOf(it.lastOpenedAt, it.addedAt) }
+            if (books.isNotEmpty()) {
+                _markdownChoice.value = MarkdownChoice(uris, books)
+                return
+            }
+        }
+        importAsNew(uris, onImported)
+    }
+
+    fun chooseNewBook(choice: MarkdownChoice) {
+        _markdownChoice.value = null
+        importAsNew(choice.uris)
+    }
+
+    fun chooseExistingBook(choice: MarkdownChoice, book: Book) {
+        _markdownChoice.value = null
+        addEpisodes(book, choice.uris)
+    }
+
+    fun dismissMarkdownChoice() {
+        _markdownChoice.value = null
+    }
+
+    private fun importAsNew(uris: List<Uri>, onImported: (Book) -> Unit = {}) {
+        // Several Markdown files together are the episodes of one book.
         if (uris.size > 1 && importer.allMarkdown(uris)) {
             importSeries(uris, onImported)
             return

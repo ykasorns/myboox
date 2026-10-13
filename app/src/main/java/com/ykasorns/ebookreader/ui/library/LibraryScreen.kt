@@ -7,7 +7,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -103,6 +105,7 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpen: (Book) -> Unit) {
     var editing by remember { mutableStateOf<Book?>(null) }
     var addingTo by remember { mutableStateOf<Book?>(null) }
     val nameRequest by viewModel.nameRequest.collectAsStateWithLifecycle()
+    val markdownChoice by viewModel.markdownChoice.collectAsStateWithLifecycle()
 
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { message ->
@@ -178,6 +181,52 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpen: (Book) -> Unit) {
                 LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
             }
         }
+    }
+
+    markdownChoice?.let { choice ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissMarkdownChoice,
+            title = { Text(stringResource(R.string.add_to_which_book)) },
+            text = {
+                Column {
+                    Text(
+                        context.resources.getQuantityString(R.plurals.markdown_files_received, choice.uris.size, choice.uris.size),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    LazyColumn(Modifier.heightIn(max = 280.dp)) {
+                        items(choice.books, key = { it.id }) { book ->
+                            Surface(
+                                onClick = { viewModel.chooseExistingBook(choice, book) },
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.Transparent,
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    BookCover(book, Modifier.width(36.dp).aspectRatio(2f / 3f))
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        book.title,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.chooseNewBook(choice) }) { Text(stringResource(R.string.new_book)) }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissMarkdownChoice) { Text(stringResource(R.string.cancel)) }
+            },
+        )
     }
 
     (editing ?: nameRequest)?.let { book ->

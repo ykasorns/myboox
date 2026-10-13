@@ -73,4 +73,10 @@
     <string name="save">Save</string>
     <string name="episodes_added">Episodes added: %1$d</string>
     <string name="episodes_failed">Couldn\'t add the episodes. Import the book again to enable adding episodes.</string>
+    <string name="add_to_which_book">Add to which book?</string>
+    <string name="new_book">New book</string>
+    <plurals name="markdown_files_received">
+        <item quantity="one">%1$d Markdown file. Add it as an episode of a book on your shelf, or make a new book.</item>
+        <item quantity="other">%1$d Markdown files. Add them as episodes of a book on your shelf, or make a new book.</item>
+    </plurals>
 </resources>

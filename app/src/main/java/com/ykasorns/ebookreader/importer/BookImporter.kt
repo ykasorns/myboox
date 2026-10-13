@@ -116,6 +116,10 @@ class BookImporter(private val context: Context, private val library: LibraryRep
         uris.size
     }
 
+    /** Whether episodes can be added to [book] (it keeps its Markdown sources). */
+    fun canAddEpisodes(book: Book): Boolean =
+        book.format == BookFormat.MARKDOWN && sourcesDir(library.bookDir(book.id)).isDirectory
+
     private fun sourcesDir(bookDir: File) = File(bookDir, "sources")
 
     private fun copySource(uri: Uri, sources: File): File {

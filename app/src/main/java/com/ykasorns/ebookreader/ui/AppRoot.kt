@@ -25,6 +25,8 @@ fun AppRoot(incoming: StateFlow<List<Uri>>, onIncomingHandled: () -> Unit) {
         if (pending.isEmpty()) return@LaunchedEffect
         val uris = pending
         onIncomingHandled()
+        // Back to the library, where any "which book?" question is shown.
+        openBookId = null
         // A single file opened from another app goes straight to the reader.
         libraryViewModel.import(uris) { book -> if (uris.size == 1) openBookId = book.id }
     }
