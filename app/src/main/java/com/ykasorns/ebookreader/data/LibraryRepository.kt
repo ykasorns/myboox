@@ -33,6 +33,15 @@ class LibraryRepository(context: Context) {
 
     fun add(book: Book) = mutate { list -> listOf(book) + list.filterNot { it.id == book.id } }
 
+    fun rename(id: String, title: String, author: String) = mutate { list ->
+        list.map { if (it.id == id) it.copy(title = title, author = author) else it }
+    }
+
+    /** Moves a book to the top of "Recent" after its content changed. */
+    fun touch(id: String) = mutate { list ->
+        list.map { if (it.id == id) it.copy(addedAt = System.currentTimeMillis()) else it }
+    }
+
     fun markOpened(id: String) = mutate { list ->
         list.map { if (it.id == id) it.copy(lastOpenedAt = System.currentTimeMillis()) else it }
     }

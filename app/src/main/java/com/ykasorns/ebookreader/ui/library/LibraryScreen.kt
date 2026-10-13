@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -42,6 +43,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -73,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ykasorns.ebookreader.R
 import com.ykasorns.ebookreader.data.Book
+import com.ykasorns.ebookreader.data.BookFormat
 import com.ykasorns.ebookreader.data.LibrarySort
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -97,12 +100,17 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpen: (Book) -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     var pendingRemoval by remember { mutableStateOf<Book?>(null) }
+    var editing by remember { mutableStateOf<Book?>(null) }
+    var addingTo by remember { mutableStateOf<Book?>(null) }
+    val nameRequest by viewModel.nameRequest.collectAsStateWithLifecycle()
 
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { message ->
             val text = when (message) {
                 is LibraryMessage.Added -> context.getString(R.string.import_done, message.count)
                 is LibraryMessage.Failed -> context.getString(R.string.import_failed, message.name)
+                is LibraryMessage.EpisodesAdded -> context.getString(R.string.episodes_added, message.count)
+                LibraryMessage.EpisodesFailed -> context.getString(R.string.episodes_failed)
             }
             snackbar.showSnackbar(text)
         }
@@ -112,6 +120,10 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpen: (Book) -> Unit) {
         viewModel.import(uris)
     }
     val pickBooks = { picker.launch(pickerMimeTypes) }
+    val episodePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        addingTo?.let { book -> viewModel.addEpisodes(book, uris) }
+        addingTo = null
+    }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     // Light mode uses a warm paper colour behind the crayon bookshelf.
@@ -152,13 +164,35 @@ fun LibraryScreen(viewModel: LibraryViewModel, onOpen: (Book) -> Unit) {
                     continueBook = continueBook,
                     bottomPadding = padding.calculateBottomPadding(),
                     onOpen = onOpen,
-                    onRemove = { pendingRemoval = it },
+                    actions = BookActions(
+                        onRemove = { pendingRemoval = it },
+                        onEdit = { editing = it },
+                        onAddEpisodes = { book ->
+                            addingTo = book
+                            episodePicker.launch(markdownMimeTypes)
+                        },
+                    ),
                 )
             }
             if (importing > 0) {
                 LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
             }
         }
+    }
+
+    (editing ?: nameRequest)?.let { book ->
+        EditBookDialog(
+            book = book,
+            isNew = editing == null,
+            onSave = { title, author ->
+                viewModel.rename(book, title, author)
+                editing = null
+            },
+            onDismiss = {
+                editing = null
+                viewModel.dismissNameRequest()
+            },
+        )
     }
 
     pendingRemoval?.let { book ->
@@ -225,7 +259,7 @@ private fun BookGrid(
     continueBook: Book?,
     bottomPadding: Dp,
     onOpen: (Book) -> Unit,
-    onRemove: (Book) -> Unit,
+    actions: BookActions,
 ) {
     val dark = isSystemInDarkTheme()
     val palette = if (dark) CrayonPalette.dark else CrayonPalette.light
@@ -281,7 +315,7 @@ private fun BookGrid(
                     doodleColors = palette[(rowIndex + 1) % palette.size] to palette[(rowIndex + 2) % palette.size],
                     wood = wood,
                     onOpen = onOpen,
-                    onRemove = onRemove,
+                    actions = actions,
                 )
             }
         }
@@ -302,7 +336,7 @@ private fun ShelfRow(
     doodleColors: Pair<Color, Color>,
     wood: Color,
     onOpen: (Book) -> Unit,
-    onRemove: (Book) -> Unit,
+    actions: BookActions,
 ) {
     val coverHeight = cell * 1.5f
     val topSpace = if (isFirst) 10.dp else 22.dp
@@ -370,7 +404,7 @@ private fun ShelfRow(
                     horizontalArrangement = Arrangement.spacedBy(gap),
                 ) {
                     books.forEach { book ->
-                        ShelfCover(book, cell, coverHeight, onOpen = { onOpen(book) }, onRemove = { onRemove(book) })
+                        ShelfCover(book, cell, coverHeight, onOpen = { onOpen(book) }, actions = actions)
                     }
                 }
             }
@@ -399,8 +433,17 @@ private fun ShelfRow(
     }
 }
 
+/** What the long-press menu on a book can do. */
+private class BookActions(
+    val onRemove: (Book) -> Unit,
+    val onEdit: (Book) -> Unit,
+    val onAddEpisodes: (Book) -> Unit,
+)
+
+private val markdownMimeTypes = arrayOf("text/markdown", "text/x-markdown", "text/plain", "application/octet-stream")
+
 @Composable
-private fun ShelfCover(book: Book, width: Dp, height: Dp, onOpen: () -> Unit, onRemove: () -> Unit) {
+private fun ShelfCover(book: Book, width: Dp, height: Dp, onOpen: () -> Unit, actions: BookActions) {
     var menu by remember { mutableStateOf(false) }
     Box {
         BookCover(
@@ -411,12 +454,30 @@ private fun ShelfCover(book: Book, width: Dp, height: Dp, onOpen: () -> Unit, on
                 .combinedClickable(onClick = onOpen, onLongClick = { menu = true }),
         )
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (book.format == BookFormat.MARKDOWN) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.add_episodes)) },
+                    leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    onClick = {
+                        menu = false
+                        actions.onAddEpisodes(book)
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.edit_book)) },
+                leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                onClick = {
+                    menu = false
+                    actions.onEdit(book)
+                },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.remove_book)) },
                 leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
                 onClick = {
                     menu = false
-                    onRemove()
+                    actions.onRemove(book)
                 },
             )
         }
@@ -519,4 +580,34 @@ private fun EmptyLibrary(onAdd: () -> Unit) {
             Text(stringResource(R.string.add_books))
         }
     }
+}
+
+@Composable
+private fun EditBookDialog(book: Book, isNew: Boolean, onSave: (String, String) -> Unit, onDismiss: () -> Unit) {
+    var title by remember(book.id) { mutableStateOf(book.title) }
+    var author by remember(book.id) { mutableStateOf(book.author) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(if (isNew) R.string.name_your_book else R.string.edit_book)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text(stringResource(R.string.book_title)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = author,
+                    onValueChange = { author = it },
+                    label = { Text(stringResource(R.string.book_author)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(title, author) }) { Text(stringResource(R.string.save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
 }

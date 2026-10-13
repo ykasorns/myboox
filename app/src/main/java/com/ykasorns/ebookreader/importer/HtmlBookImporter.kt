@@ -26,7 +26,9 @@ object HtmlBookImporter {
     private val containers = setOf("div", "article", "main", "section")
     private val headingTags = (1..6).map { "h$it" }.toSet()
 
-    fun importMarkdown(source: File, bookDir: File): ImportMeta {
+    private class Markdown(val html: String, val title: String, val author: String)
+
+    private fun renderMarkdown(source: File): Markdown {
         val text = TxtImporter.decode(source.readBytes())
         val extensions = listOf(
             TablesExtension.create(),
@@ -39,7 +41,50 @@ object HtmlBookImporter {
         fun field(name: String) = frontMatter[name]?.firstOrNull().orEmpty().trim().trim('"', '\'')
         // A single line break starts a new line, as in Obsidian, Typora and most writing apps.
         val html = HtmlRenderer.builder().extensions(extensions).softbreak("<br>\n").build().render(document)
-        return split(Jsoup.parseBodyFragment(html), extraHead = "", title = field("title"), author = field("author"), bookDir = bookDir)
+        return Markdown(html, field("title"), field("author"))
+    }
+
+    fun importMarkdown(source: File, bookDir: File): ImportMeta = buildMarkdownBook(listOf(source), bookDir)
+
+    /**
+     * Builds a book from one or more Markdown files. With several files (one per episode,
+     * e.g. ep01.md, ep02.md …) every file becomes its own chapter, in natural file-name order.
+     * Rebuilding replaces the previous content, so episodes can be added or updated later.
+     */
+    fun buildMarkdownBook(sources: List<File>, bookDir: File): ImportMeta {
+        if (sources.isEmpty()) throw ImportException("No Markdown files")
+        File(bookDir, WebManifest.CONTENT_DIR).deleteRecursively()
+        val ordered = sources.sortedWith(compareBy(NaturalOrder) { it.name })
+        val parts = ordered.map { renderMarkdown(it) }
+        val title = parts.firstNotNullOfOrNull { part -> part.title.takeIf { it.isNotBlank() } }.orEmpty()
+        val author = parts.firstNotNullOfOrNull { part -> part.author.takeIf { it.isNotBlank() } }.orEmpty()
+        if (parts.size == 1) {
+            return split(Jsoup.parseBodyFragment(parts[0].html), extraHead = "", title = title, author = author, bookDir = bookDir)
+        }
+        val joined = parts.joinToString("\n") { "<section class=\"md-part\">${it.html}</section>" }
+        return split(Jsoup.parseBodyFragment(joined), extraHead = "", title = title, author = author, bookDir = bookDir, filesAreChapters = true)
+    }
+
+    /** Orders "ep2" before "ep10" by comparing runs of digits as numbers. */
+    object NaturalOrder : Comparator<String> {
+        private val chunk = Regex("\\d+|\\D+")
+
+        override fun compare(a: String, b: String): Int {
+            val x = chunk.findAll(a.lowercase()).map { it.value }.toList()
+            val y = chunk.findAll(b.lowercase()).map { it.value }.toList()
+            for (i in 0 until minOf(x.size, y.size)) {
+                val p = x[i]
+                val q = y[i]
+                val result = if (p[0].isDigit() && q[0].isDigit()) {
+                    p.trimStart('0').length.compareTo(q.trimStart('0').length).takeIf { it != 0 }
+                        ?: p.trimStart('0').compareTo(q.trimStart('0'))
+                } else {
+                    p.compareTo(q)
+                }
+                if (result != 0) return result
+            }
+            return x.size.compareTo(y.size)
+        }
     }
 
     fun importHtml(source: File, bookDir: File): ImportMeta {
@@ -51,10 +96,17 @@ object HtmlBookImporter {
         return split(document, extraHead = styles, title = document.title(), author = author, bookDir = bookDir)
     }
 
-    private fun split(document: Document, extraHead: String, title: String, author: String, bookDir: File): ImportMeta {
+    private fun split(
+        document: Document,
+        extraHead: String,
+        title: String,
+        author: String,
+        bookDir: File,
+        filesAreChapters: Boolean = false,
+    ): ImportMeta {
         // Step into wrapper elements such as <div id="book"><main>…</main></div>.
         var root: Element = document.body()
-        while (true) {
+        while (!filesAreChapters) {
             val elements = root.children()
             val onlyChild = elements.singleOrNull() ?: break
             val hasOtherText = root.childNodes().any { it is TextNode && !it.isBlank }
@@ -81,13 +133,19 @@ object HtmlBookImporter {
             h2Count >= 2 -> 2
             else -> 0
         }
-        // A single <h1> is usually the book's title.
-        val bookTitle = title.ifBlank { if (h1Count == 1) root.selectFirst("h1")?.text().orEmpty() else "" }
+        // A single <h1> above several <h2> chapters is the book's title. A single <h1> on its
+        // own is just the heading of the only chapter (e.g. "ตอนที่ 1").
+        val bookTitle = title.ifBlank { if (h1Count == 1 && splitLevel == 2) root.selectFirst("h1")?.text().orEmpty() else "" }
 
         val chapters = mutableListOf<MutableList<Node>>()
+        if (filesAreChapters) {
+            root.children().filter { it.hasClass("md-part") }.forEach { part ->
+                if (part.childNodes().any { it.hasContent() }) chapters += part.childNodes().toMutableList()
+            }
+        }
         var current = mutableListOf<Node>()
         var currentSize = 0
-        for (node in root.childNodes().toList()) {
+        for (node in if (filesAreChapters) emptyList() else root.childNodes().toList()) {
             val size = node.outerHtml().length
             val boundary = (splitLevel > 0 && startsChapter(node, splitLevel)) || currentSize + size > MAX_CHAPTER_CHARS
             if (boundary && current.any { it.hasContent() }) {
@@ -124,7 +182,11 @@ object HtmlBookImporter {
         }
 
         val content = File(bookDir, WebManifest.CONTENT_DIR).apply { mkdirs() }
-        val baseLevel = if (splitLevel > 0) splitLevel else (1..6).firstOrNull { root.select("h$it").isNotEmpty() } ?: 1
+        val baseLevel = if (splitLevel > 0 && !filesAreChapters) {
+            splitLevel
+        } else {
+            (1..6).firstOrNull { root.select("h$it").isNotEmpty() } ?: 1
+        }
         val spine = mutableListOf<SpineItem>()
         val toc = mutableListOf<TocEntry>()
         chapters.forEachIndexed { index, nodes ->

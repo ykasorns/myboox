@@ -65,4 +65,12 @@
     <string name="pdf_scroll">เลื่อนต่อเนื่อง</string>
     <string name="pdf_pages">ทีละหน้า</string>
     <string name="pdf_crop">ตัดขอบขาว</string>
+    <string name="add_episodes">เพิ่มตอน</string>
+    <string name="edit_book">แก้ไขชื่อ</string>
+    <string name="name_your_book">ตั้งชื่อหนังสือ</string>
+    <string name="book_title">ชื่อหนังสือ</string>
+    <string name="book_author">ผู้แต่ง</string>
+    <string name="save">บันทึก</string>
+    <string name="episodes_added">เพิ่มแล้ว %1$d ตอน</string>
+    <string name="episodes_failed">เพิ่มตอนไม่ได้ ลองนำเข้าเล่มนี้ใหม่อีกครั้ง</string>
 </resources>

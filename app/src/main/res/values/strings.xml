@@ -65,4 +65,12 @@
     <string name="pdf_scroll">Scroll</string>
     <string name="pdf_pages">Pages</string>
     <string name="pdf_crop">Trim white margins</string>
+    <string name="add_episodes">Add episodes</string>
+    <string name="edit_book">Edit title</string>
+    <string name="name_your_book">Name this book</string>
+    <string name="book_title">Title</string>
+    <string name="book_author">Author</string>
+    <string name="save">Save</string>
+    <string name="episodes_added">Episodes added: %1$d</string>
+    <string name="episodes_failed">Couldn\'t add the episodes. Import the book again to enable adding episodes.</string>
 </resources>

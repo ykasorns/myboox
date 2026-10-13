@@ -25,6 +25,8 @@ import kotlinx.coroutines.launch
 sealed interface LibraryMessage {
     data class Added(val count: Int) : LibraryMessage
     data class Failed(val name: String) : LibraryMessage
+    data class EpisodesAdded(val count: Int) : LibraryMessage
+    data object EpisodesFailed : LibraryMessage
 }
 
 class LibraryViewModel : ViewModel() {
@@ -51,6 +53,10 @@ class LibraryViewModel : ViewModel() {
     private val _importing = MutableStateFlow(0)
     val importing: StateFlow<Int> = _importing.asStateFlow()
 
+    /** A book that was just created from several files and should be given a proper name. */
+    private val _nameRequest = MutableStateFlow<Book?>(null)
+    val nameRequest: StateFlow<Book?> = _nameRequest.asStateFlow()
+
     private val _messages = MutableSharedFlow<LibraryMessage>(extraBufferCapacity = 8)
     val messages: SharedFlow<LibraryMessage> = _messages.asSharedFlow()
 
@@ -61,6 +67,11 @@ class LibraryViewModel : ViewModel() {
 
     fun import(uris: List<Uri>, onImported: (Book) -> Unit = {}) {
         if (uris.isEmpty()) return
+        // Several Markdown files picked together are episodes of one book.
+        if (uris.size > 1 && importer.allMarkdown(uris)) {
+            importSeries(uris, onImported)
+            return
+        }
         viewModelScope.launch {
             _importing.update { it + uris.size }
             var added = 0
@@ -81,6 +92,53 @@ class LibraryViewModel : ViewModel() {
             if (added > 0) _messages.tryEmit(LibraryMessage.Added(added))
             last?.let(onImported)
         }
+    }
+
+    private fun importSeries(uris: List<Uri>, onImported: (Book) -> Unit) {
+        viewModelScope.launch {
+            _importing.update { it + 1 }
+            try {
+                val book = importer.importMarkdownSeries(uris)
+                _messages.tryEmit(LibraryMessage.Added(1))
+                _nameRequest.value = book
+                onImported(book)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("LibraryViewModel", "Series import failed", e)
+                _messages.tryEmit(LibraryMessage.Failed(importer.displayName(uris.first())))
+            } finally {
+                _importing.update { it - 1 }
+            }
+        }
+    }
+
+    fun addEpisodes(book: Book, uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            _importing.update { it + 1 }
+            try {
+                val count = importer.addMarkdownEpisodes(book, uris)
+                _messages.tryEmit(LibraryMessage.EpisodesAdded(count))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("LibraryViewModel", "Adding episodes failed", e)
+                _messages.tryEmit(LibraryMessage.EpisodesFailed)
+            } finally {
+                _importing.update { it - 1 }
+            }
+        }
+    }
+
+    fun rename(book: Book, title: String, author: String) {
+        _nameRequest.value = null
+        val cleanTitle = title.trim().ifBlank { book.title }
+        viewModelScope.launch(Dispatchers.IO) { library.rename(book.id, cleanTitle, author.trim()) }
+    }
+
+    fun dismissNameRequest() {
+        _nameRequest.value = null
     }
 
     fun remove(book: Book) {
