@@ -86,9 +86,19 @@
     return css.join('\n');
   }
 
+  // The last column ends before the right margin, so the document is not quite as wide as
+  // its pages and the last page could not be scrolled fully into view. This marker sits at the
+  // right edge of the last page to make room for it.
+  var spacer = document.createElement('div');
+  spacer.setAttribute('aria-hidden', 'true');
+  spacer.style.cssText = 'position:absolute;top:0;width:1px;height:1px;margin:0;padding:0;pointer-events:none;';
+
   function measure() {
     var w = viewW();
+    if (spacer.parentNode) spacer.parentNode.removeChild(spacer);
     pageCount = Math.max(1, Math.ceil((scroller().scrollWidth - 4) / w));
+    spacer.style.left = (pageCount * w - 1) + 'px';
+    root.appendChild(spacer);
     if (page > pageCount - 1) page = pageCount - 1;
   }
 
