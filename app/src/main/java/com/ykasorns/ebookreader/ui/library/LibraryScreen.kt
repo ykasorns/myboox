@@ -89,6 +89,8 @@ private val pickerMimeTypes = arrayOf(
     "text/markdown",
     "text/x-markdown",
     "text/html",
+    "application/zip",
+    "application/x-zip-compressed",
     // Many file managers do not know the EPUB type; the importer checks the content anyway.
     "application/octet-stream",
 )
@@ -489,7 +491,14 @@ private class BookActions(
     val onAddEpisodes: (Book) -> Unit,
 )
 
-private val markdownMimeTypes = arrayOf("text/markdown", "text/x-markdown", "text/plain", "application/octet-stream")
+private val markdownMimeTypes = arrayOf(
+    "text/markdown",
+    "text/x-markdown",
+    "text/plain",
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/octet-stream",
+)
 
 @Composable
 private fun ShelfCover(book: Book, width: Dp, height: Dp, onOpen: () -> Unit, actions: BookActions) {

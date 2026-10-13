@@ -51,11 +51,15 @@ object HtmlBookImporter {
      * e.g. ep01.md, ep02.md …) every file becomes its own chapter, in natural file-name order.
      * Rebuilding replaces the previous content, so episodes can be added or updated later.
      */
-    fun buildMarkdownBook(sources: List<File>, bookDir: File): ImportMeta {
+    fun buildMarkdownBook(sources: List<File>, bookDir: File, assetRoot: File? = null): ImportMeta {
         if (sources.isEmpty()) throw ImportException("No Markdown files")
-        File(bookDir, WebManifest.CONTENT_DIR).deleteRecursively()
-        val ordered = sources.sortedWith(compareBy(NaturalOrder) { it.name })
-        val parts = ordered.map { renderMarkdown(it) }
+        val content = File(bookDir, WebManifest.CONTENT_DIR)
+        content.deleteRecursively()
+        // [sources] is already in reading order (see MarkdownSources.markdownFiles).
+        val parts = sources.map { file ->
+            val part = renderMarkdown(file)
+            if (assetRoot == null) part else Markdown(withImages(part.html, file, assetRoot, content), part.title, part.author)
+        }
         val title = parts.firstNotNullOfOrNull { part -> part.title.takeIf { it.isNotBlank() } }.orEmpty()
         val author = parts.firstNotNullOfOrNull { part -> part.author.takeIf { it.isNotBlank() } }.orEmpty()
         if (parts.size == 1) {
@@ -63,6 +67,37 @@ object HtmlBookImporter {
         }
         val joined = parts.joinToString("\n") { "<section class=\"md-part\">${it.html}</section>" }
         return split(Jsoup.parseBodyFragment(joined), extraHead = "", title = title, author = author, bookDir = bookDir, filesAreChapters = true)
+    }
+
+    /**
+     * Copies images a Markdown file refers to (relative to its own folder, as in a zipped book)
+     * into the book's content folder and points the <img> tags at the copies.
+     */
+    private fun withImages(html: String, markdown: File, root: File, content: File): String {
+        val fragment = Jsoup.parseBodyFragment(html)
+        val images = fragment.select("img[src]")
+        if (images.isEmpty()) return html
+        val rootPath = root.canonicalPath + File.separator
+        for (image in images) {
+            val src = image.attr("src")
+            if (src.contains("://") || src.startsWith("data:") || src.startsWith("/")) continue
+            val decoded = runCatching { java.net.URLDecoder.decode(src.replace("+", "%2B"), "UTF-8") }.getOrDefault(src)
+            val file = File(markdown.parentFile, decoded.substringBefore('#').substringBefore('?')).canonicalFile
+            if (!file.path.startsWith(rootPath) || !file.isFile) continue
+            val relative = file.relativeTo(root).invariantSeparatorsPath
+            val copy = File(content, "assets/$relative")
+            copy.parentFile?.mkdirs()
+            file.copyTo(copy, overwrite = true)
+            image.attr("src", "assets/" + relative.split('/').joinToString("/") { encodeSegment(it) })
+        }
+        return fragment.body().html()
+    }
+
+    private fun encodeSegment(segment: String): String = buildString {
+        for (byte in segment.toByteArray(Charsets.UTF_8)) {
+            val c = byte.toInt() and 0xFF
+            if (c.toChar().isLetterOrDigit() && c < 0x80 || c.toChar() in "-._~") append(c.toChar()) else append("%%%02X".format(c))
+        }
     }
 
     /** Orders "ep2" before "ep10" by comparing runs of digits as numbers. */

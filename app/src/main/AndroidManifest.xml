@@ -34,6 +34,7 @@
                 <data android:mimeType="text/markdown" />
                 <data android:mimeType="text/x-markdown" />
                 <data android:mimeType="text/html" />
+                <data android:mimeType="application/zip" />
             </intent-filter>
 
             <intent-filter>
@@ -42,6 +43,8 @@
                 <data android:mimeType="application/epub+zip" />
                 <data android:mimeType="application/pdf" />
                 <data android:mimeType="application/xhtml+xml" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
                 <!-- Google Drive and many file managers label .md/.epub files like this. -->
                 <data android:mimeType="application/octet-stream" />
                 <data android:mimeType="text/*" />
@@ -54,6 +57,8 @@
                 <data android:mimeType="application/epub+zip" />
                 <data android:mimeType="application/pdf" />
                 <data android:mimeType="application/xhtml+xml" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
                 <!-- Google Drive and many file managers label .md/.epub files like this. -->
                 <data android:mimeType="application/octet-stream" />
                 <data android:mimeType="text/*" />

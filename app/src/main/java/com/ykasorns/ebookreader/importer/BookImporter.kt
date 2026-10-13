@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import com.ykasorns.ebookreader.data.Book
 import com.ykasorns.ebookreader.data.BookFormat
 import com.ykasorns.ebookreader.data.LibraryRepository
+import com.ykasorns.ebookreader.ui.library.CoverCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -47,10 +48,11 @@ class BookImporter(private val context: Context, private val library: LibraryRep
                     BookFormat.PDF -> PdfImporter.import(tmp, dir, library.coverFile(id))
                     BookFormat.TXT -> TxtImporter.import(tmp, dir)
                     BookFormat.MARKDOWN -> {
-                        // Keep the source so episodes can be added to this book later.
-                        val source = File(sourcesDir(dir).apply { mkdirs() }, safeName(name, "md"))
-                        tmp.copyTo(source, overwrite = true)
-                        HtmlBookImporter.buildMarkdownBook(listOf(source), dir)
+                        // Keep the sources (a .md file, or a .zip of episodes) so episodes can be
+                        // added to this book later.
+                        val sources = sourcesDir(dir)
+                        MarkdownSources.store(tmp, name, sources)
+                        buildMarkdown(dir, sources, id)
                     }
                     BookFormat.HTML -> HtmlBookImporter.importHtml(tmp, dir)
                 }
@@ -72,10 +74,22 @@ class BookImporter(private val context: Context, private val library: LibraryRep
         }
     }
 
-    /** True when every file looks like Markdown, so a multi-file pick can become one book. */
-    fun allMarkdown(uris: List<Uri>): Boolean = uris.isNotEmpty() && uris.all { uri ->
-        val ext = displayName(uri).substringAfterLast('.', "").lowercase()
-        ext in MARKDOWN_EXTENSIONS || context.contentResolver.getType(uri) in setOf("text/markdown", "text/x-markdown")
+    /**
+     * True when every file is Markdown or a .zip of Markdown files, so they can become (or be
+     * added to) one book. Zips are peeked at, which reads only their file names.
+     */
+    suspend fun allMarkdown(uris: List<Uri>): Boolean = withContext(Dispatchers.IO) {
+        uris.isNotEmpty() && uris.all { uri ->
+            val name = displayName(uri)
+            val mime = context.contentResolver.getType(uri)
+            when {
+                MarkdownSources.isMarkdownName(name) || mime == "text/markdown" || mime == "text/x-markdown" -> true
+                name.endsWith(".zip", ignoreCase = true) || mime == "application/zip" -> runCatching {
+                    MarkdownSources.zipHasMarkdown { context.contentResolver.openInputStream(uri) ?: throw ImportException(name) }
+                }.getOrDefault(false)
+                else -> false
+            }
+        }
     }
 
     /** Several Markdown files (one per episode) become a single book, one chapter per file. */
@@ -85,8 +99,8 @@ class BookImporter(private val context: Context, private val library: LibraryRep
         dir.mkdirs()
         try {
             val sources = sourcesDir(dir).apply { mkdirs() }
-            val names = uris.map { copySource(it, sources).nameWithoutExtension }
-            val meta = HtmlBookImporter.buildMarkdownBook(sources.listFiles().orEmpty().toList(), dir)
+            val names = uris.map { uri -> copySource(uri, sources) }
+            val meta = buildMarkdown(dir, sources, id)
             val book = Book(
                 id = id,
                 title = meta.title.ifBlank { suggestTitle(names) },
@@ -111,7 +125,8 @@ class BookImporter(private val context: Context, private val library: LibraryRep
         val sources = sourcesDir(dir)
         if (!sources.isDirectory) throw ImportException("This book was imported before episodes could be added")
         uris.forEach { copySource(it, sources) }
-        HtmlBookImporter.buildMarkdownBook(sources.listFiles().orEmpty().toList(), dir)
+        buildMarkdown(dir, sources, book.id)
+        CoverCache.evict(book.id)
         library.touch(book.id)
         uris.size
     }
@@ -122,16 +137,24 @@ class BookImporter(private val context: Context, private val library: LibraryRep
 
     private fun sourcesDir(bookDir: File) = File(bookDir, "sources")
 
-    private fun copySource(uri: Uri, sources: File): File {
-        val target = File(sources, safeName(displayName(uri), "md"))
-        val input = context.contentResolver.openInputStream(uri) ?: throw ImportException("Cannot read ${target.name}")
-        input.use { source -> target.outputStream().use { source.copyTo(it) } }
-        return target
+    private fun buildMarkdown(dir: File, sources: File, id: String): ImportMeta {
+        val meta = HtmlBookImporter.buildMarkdownBook(MarkdownSources.markdownFiles(sources), dir, assetRoot = sources)
+        MarkdownSources.findCover(sources)?.let { runCatching { it.copyTo(library.coverFile(id), overwrite = true) } }
+        return meta
     }
 
-    private fun safeName(name: String, defaultExtension: String): String {
-        val cleaned = name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "file" }
-        return if ('.' in cleaned) cleaned else "$cleaned.$defaultExtension"
+    /** Stores one shared/picked file (a .md, or a .zip of episodes) and returns its base name. */
+    private fun copySource(uri: Uri, sources: File): String {
+        val name = displayName(uri)
+        val tmp = File(context.cacheDir, "source-${System.nanoTime()}")
+        try {
+            val input = context.contentResolver.openInputStream(uri) ?: throw ImportException("Cannot read $name")
+            input.use { source -> tmp.outputStream().use { source.copyTo(it) } }
+            MarkdownSources.store(tmp, name, sources)
+        } finally {
+            tmp.delete()
+        }
+        return name.substringBeforeLast('.')
     }
 
     /** "ep01", "ep02" → nothing useful; "มังกรเหนือ-01", "มังกรเหนือ-02" → "มังกรเหนือ". */
@@ -157,13 +180,14 @@ class BookImporter(private val context: Context, private val library: LibraryRep
         val ext = name.substringAfterLast('.', "").lowercase()
         if (read >= 4 && String(head, 0, 4, Charsets.US_ASCII) == "%PDF") return BookFormat.PDF
         if (read >= 2 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte()) {
-            return if (ext == "epub" || mime == "application/epub+zip" || EpubImporter.looksLikeEpub(file)) {
-                BookFormat.EPUB
-            } else {
-                null
+            return when {
+                ext == "epub" || mime == "application/epub+zip" || EpubImporter.looksLikeEpub(file) -> BookFormat.EPUB
+                // A zip of Markdown episodes (and their images) becomes one book.
+                MarkdownSources.zipHasMarkdown(file) -> BookFormat.MARKDOWN
+                else -> null
             }
         }
-        if (ext in MARKDOWN_EXTENSIONS || mime == "text/markdown" || mime == "text/x-markdown") {
+        if (ext in MarkdownSources.MARKDOWN_EXTENSIONS || mime == "text/markdown" || mime == "text/x-markdown") {
             return BookFormat.MARKDOWN
         }
         if (ext in setOf("html", "htm", "xhtml") || mime == "text/html" || mime == "application/xhtml+xml") {
@@ -173,7 +197,4 @@ class BookImporter(private val context: Context, private val library: LibraryRep
         return null
     }
 
-    companion object {
-        val MARKDOWN_EXTENSIONS = setOf("md", "markdown", "mdown", "mkd")
-    }
 }

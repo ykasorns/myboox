@@ -73,21 +73,24 @@ class LibraryViewModel : ViewModel() {
 
     fun import(uris: List<Uri>, onImported: (Book) -> Unit = {}) {
         if (uris.isEmpty()) return
-        if (importer.allMarkdown(uris)) {
-            // New episodes usually belong to a book that is already on the shelf: ask first.
-            val books = library.books.value.filter { importer.canAddEpisodes(it) }
-                .sortedByDescending { maxOf(it.lastOpenedAt, it.addedAt) }
-            if (books.isNotEmpty()) {
-                _markdownChoice.value = MarkdownChoice(uris, books)
-                return
+        viewModelScope.launch {
+            val markdown = importer.allMarkdown(uris)
+            if (markdown) {
+                // New episodes usually belong to a book that is already on the shelf: ask first.
+                val books = library.books.value.filter { importer.canAddEpisodes(it) }
+                    .sortedByDescending { maxOf(it.lastOpenedAt, it.addedAt) }
+                if (books.isNotEmpty()) {
+                    _markdownChoice.value = MarkdownChoice(uris, books)
+                    return@launch
+                }
             }
+            importAsNew(uris, markdown, onImported)
         }
-        importAsNew(uris, onImported)
     }
 
     fun chooseNewBook(choice: MarkdownChoice) {
         _markdownChoice.value = null
-        importAsNew(choice.uris)
+        importAsNew(choice.uris, markdown = true)
     }
 
     fun chooseExistingBook(choice: MarkdownChoice, book: Book) {
@@ -99,9 +102,9 @@ class LibraryViewModel : ViewModel() {
         _markdownChoice.value = null
     }
 
-    private fun importAsNew(uris: List<Uri>, onImported: (Book) -> Unit = {}) {
+    private fun importAsNew(uris: List<Uri>, markdown: Boolean, onImported: (Book) -> Unit = {}) {
         // Several Markdown files together are the episodes of one book.
-        if (uris.size > 1 && importer.allMarkdown(uris)) {
+        if (uris.size > 1 && markdown) {
             importSeries(uris, onImported)
             return
         }
