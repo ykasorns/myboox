@@ -6,7 +6,7 @@
     <string name="add_books">Add books</string>
     <string name="more_options">More options</string>
     <string name="empty_title">Your library is empty</string>
-    <string name="empty_body">Add EPUB, PDF or TXT files from your device to start reading.</string>
+    <string name="empty_body">Add EPUB, PDF, TXT, Markdown (.md) or HTML files from your device to start reading.</string>
     <string name="continue_reading">Continue reading</string>
     <string name="all_books">All books</string>
     <string name="book_new">New</string>

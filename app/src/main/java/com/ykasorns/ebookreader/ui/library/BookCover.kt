@@ -146,7 +146,7 @@ private fun GeneratedCover(book: Book) {
             )
         }
         Text(
-            text = book.format.name,
+            text = book.format.label,
             color = Color.White.copy(alpha = 0.55f),
             fontSize = 9.sp,
             letterSpacing = 1.5.sp,

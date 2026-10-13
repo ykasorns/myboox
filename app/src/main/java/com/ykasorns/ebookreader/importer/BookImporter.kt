@@ -46,6 +46,8 @@ class BookImporter(private val context: Context, private val library: LibraryRep
                     BookFormat.EPUB -> EpubImporter.import(tmp, dir, library.coverFile(id))
                     BookFormat.PDF -> PdfImporter.import(tmp, dir, library.coverFile(id))
                     BookFormat.TXT -> TxtImporter.import(tmp, dir)
+                    BookFormat.MARKDOWN -> HtmlBookImporter.importMarkdown(tmp, dir)
+                    BookFormat.HTML -> HtmlBookImporter.importHtml(tmp, dir)
                 }
                 val book = Book(
                     id = id,
@@ -84,6 +86,12 @@ class BookImporter(private val context: Context, private val library: LibraryRep
             } else {
                 null
             }
+        }
+        if (ext in setOf("md", "markdown", "mdown", "mkd") || mime == "text/markdown" || mime == "text/x-markdown") {
+            return BookFormat.MARKDOWN
+        }
+        if (ext in setOf("html", "htm", "xhtml") || mime == "text/html" || mime == "application/xhtml+xml") {
+            return BookFormat.HTML
         }
         if (ext == "txt" || mime?.startsWith("text/") == true) return BookFormat.TXT
         return null

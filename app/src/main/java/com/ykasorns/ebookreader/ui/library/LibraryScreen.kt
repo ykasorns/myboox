@@ -81,6 +81,9 @@ private val pickerMimeTypes = arrayOf(
     "application/epub+zip",
     "application/pdf",
     "text/plain",
+    "text/markdown",
+    "text/x-markdown",
+    "text/html",
     // Many file managers do not know the EPUB type; the importer checks the content anyway.
     "application/octet-stream",
 )

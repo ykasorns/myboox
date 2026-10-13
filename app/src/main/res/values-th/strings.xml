@@ -6,7 +6,7 @@
     <string name="add_books">เพิ่มหนังสือ</string>
     <string name="more_options">ตัวเลือกเพิ่มเติม</string>
     <string name="empty_title">ยังไม่มีหนังสือ</string>
-    <string name="empty_body">เพิ่มไฟล์ EPUB, PDF หรือ TXT จากเครื่องเพื่อเริ่มอ่าน</string>
+    <string name="empty_body">เพิ่มไฟล์ EPUB, PDF, TXT, Markdown (.md) หรือ HTML จากเครื่องเพื่อเริ่มอ่าน</string>
     <string name="continue_reading">อ่านต่อ</string>
     <string name="all_books">หนังสือทั้งหมด</string>
     <string name="book_new">ใหม่</string>

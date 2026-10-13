@@ -1,8 +1,8 @@
 # Reader — Android ebook reader
 
-A simple Android ebook reader modelled on Books on iPad mini. It supports EPUB, PDF and TXT, and it works on phones, tablets and foldables.
+A simple Android ebook reader modelled on Books on iPad mini. It supports EPUB, PDF, TXT, Markdown (.md) and HTML, and it works on phones, tablets and foldables.
 
-แอปอ่าน ebook บน Android ที่ใช้งานง่ายแบบ Books บน iPad mini รองรับ EPUB, PDF และ TXT ใช้ได้ทั้งมือถือ แท็บเล็ต และจอพับ
+แอปอ่าน ebook บน Android ที่ใช้งานง่ายแบบ Books บน iPad mini รองรับ EPUB, PDF, TXT, Markdown (.md) และ HTML ใช้ได้ทั้งมือถือ แท็บเล็ต และจอพับ
 
 ## Features / ความสามารถ
 
@@ -19,6 +19,8 @@ A simple Android ebook reader modelled on Books on iPad mini. It supports EPUB, 
 - **Library.** Covers, reading progress, a "Continue reading" card, sort by recent/title/author. You can also use "Open with" or "Share" from other apps.
   ชั้นหนังสือพร้อมปก เปอร์เซ็นต์ที่อ่าน และการ์ด "อ่านต่อ"
 - **Contents and progress slider.** You can jump to any chapter. EPUB 2 (NCX) and EPUB 3 (nav) are both supported. In TXT files, lines like "บทที่ 1" or "Chapter 1" become chapters.
+- **Markdown and HTML manuscripts.** A `.md` or `.html` file reads like an EPUB. It is split into chapters at `#` headings (or `##` when there is only one `#`, which is taken as the book title), and the headings fill the contents. Title and author come from YAML front matter (`title:`, `author:`) or the HTML `<title>`. Bold, italics, quotes, tables, `---` scene breaks (shown as ⁂) and in-book links all work. A single line break starts a new line, as in Obsidian and Typora. Images must be web-free: embedded (`data:`) images work, but separate image files do not.
+  ไฟล์ .md / .html อ่านได้เหมือน EPUB แบ่งบทตามหัวข้อ # และมีสารบัญให้อัตโนมัติ
 - **Thai TXT files.** Legacy TIS-620 / Windows-874 files are detected automatically.
   ไฟล์ TXT ภาษาไทยแบบเก่า (TIS-620) อ่านได้ ไม่เป็นภาษาต่างดาว
 - **PDF.** White page margins are trimmed automatically. On phones, PDFs scroll continuously at full width, because a printed page is much shorter than a tall phone screen. On tablets they turn page by page with the curl animation, two pages side by side in landscape. Pinch or double-tap to zoom. The Paper and Night themes recolour the pages too.
@@ -54,7 +56,7 @@ You need JDK 17 and the Android SDK (compileSdk 35). The minimum Android version
 
 | Part | Where |
 |---|---|
-| Import (copy, hash, unpack, cover) | `importer/` — `EpubImporter`, `PdfImporter`, `TxtImporter` |
+| Import (copy, hash, unpack, cover) | `importer/` — `EpubImporter`, `PdfImporter`, `TxtImporter`, `HtmlBookImporter` (Markdown + HTML) |
 | Library storage | `data/LibraryRepository.kt` (`files/library.json`, one folder per book) |
 | EPUB/TXT rendering | `ui/reader/WebBookController.kt` + `assets/reader.js` |
 | PDF rendering | `ui/reader/PdfBook.kt` (Android `PdfRenderer`) + `PdfReader.kt` |

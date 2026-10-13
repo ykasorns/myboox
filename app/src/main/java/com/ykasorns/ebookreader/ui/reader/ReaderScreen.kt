@@ -92,7 +92,8 @@ fun ReaderScreen(bookId: String, onClose: () -> Unit) {
     ) {
         when (book.format) {
             BookFormat.PDF -> PdfReader(book, settings, chrome)
-            BookFormat.EPUB, BookFormat.TXT -> WebBookReader(book, settings, chrome)
+            BookFormat.EPUB, BookFormat.TXT, BookFormat.MARKDOWN, BookFormat.HTML ->
+                WebBookReader(book, settings, chrome)
         }
     }
 

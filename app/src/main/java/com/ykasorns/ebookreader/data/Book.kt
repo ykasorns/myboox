@@ -2,7 +2,13 @@ package com.ykasorns.ebookreader.data
 
 import org.json.JSONObject
 
-enum class BookFormat { EPUB, PDF, TXT }
+enum class BookFormat(val label: String) {
+    EPUB("EPUB"),
+    PDF("PDF"),
+    TXT("TXT"),
+    MARKDOWN("MD"),
+    HTML("HTML"),
+}
 
 data class Book(
     val id: String,
