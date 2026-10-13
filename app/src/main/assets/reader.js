@@ -30,8 +30,10 @@
   var style = document.createElement('style');
   (document.head || document.getElementsByTagName('head')[0] || root).appendChild(style);
 
-  function viewW() { return window.innerWidth || root.clientWidth; }
-  function viewH() { return window.innerHeight || root.clientHeight; }
+  // The app passes the real page size (CSS px = dp). Trust it over innerWidth, which some
+  // WebViews report wrong (e.g. 980) while the view is still being laid out.
+  function viewW() { var v = num(S.width, 0); return v > 0 ? Math.floor(v) : (window.innerWidth || root.clientWidth); }
+  function viewH() { var v = num(S.height, 0); return v > 0 ? Math.floor(v) : (window.innerHeight || root.clientHeight); }
   function scroller() { return document.scrollingElement || root; }
   function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
 

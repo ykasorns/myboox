@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
@@ -165,8 +166,23 @@ class WebBookController(
         view.setBackgroundColor(backgroundColor)
         view.addJavascriptInterface(Bridge(), "Android")
         view.webViewClient = Client()
-        // Post so the first style from composition is in place before the chapter is requested.
-        view.post { if (webView === view) openChapter(initialChapter, initialTarget) }
+        // Wait until the view has its real size (and the first style from composition is in
+        // place) before the chapter is requested, so it is never laid out for a wrong width.
+        whenSized(view) { if (webView === view) openChapter(initialChapter, initialTarget) }
+    }
+
+    private fun whenSized(view: View, action: () -> Unit) {
+        if (view.width > 0 && view.height > 0) {
+            view.post(action)
+            return
+        }
+        view.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(v: View, left: Int, top: Int, right: Int, bottom: Int, oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int) {
+                if (v.width <= 0 || v.height <= 0) return
+                v.removeOnLayoutChangeListener(this)
+                v.post(action)
+            }
+        })
     }
 
     fun detach() {
@@ -209,6 +225,7 @@ class WebBookController(
 
     private var turning = false
     private var turnToken = 0
+    private var lastTurnActivity = 0L
     private var turnForward = true
     private var chapterBefore = 0
     private var pageBefore = 0
@@ -266,6 +283,8 @@ class WebBookController(
         pageCountBefore = pageCount
         neighbour = null
         show(current)
+        lastTurnActivity = SystemClock.uptimeMillis()
+        main.postDelayed({ checkStuck(token) }, STUCK_TURN_MS)
         scope.launch {
             // Let the overlay reach the screen before the WebView changes underneath it.
             withFrameNanos { }
@@ -299,9 +318,15 @@ class WebBookController(
         },
     )
 
-    override fun drag(x: Float, y: Float) = curl.drag(x, y)
+    override fun drag(x: Float, y: Float) {
+        lastTurnActivity = SystemClock.uptimeMillis()
+        curl.drag(x, y)
+    }
 
-    override fun release(velocityX: Float) = curl.release(velocityX) { navigated -> finishTurn(navigated) }
+    override fun release(velocityX: Float) {
+        lastTurnActivity = SystemClock.uptimeMillis()
+        curl.release(velocityX) { navigated -> finishTurn(navigated) }
+    }
 
     private fun autoTurn(forward: Boolean) {
         var started = false
@@ -355,6 +380,18 @@ class WebBookController(
             val fraction = pageBefore.toDouble() / pageCountBefore.coerceAtLeast(1)
             openChapter(chapterBefore, if (pageBefore == 0) TARGET_START else fractionTarget(fraction))
         }
+    }
+
+    /** A turn that never finishes (a page that never draws) must not block the reader. */
+    private fun checkStuck(token: Int) {
+        if (!turning || token != turnToken) return
+        // Still being dragged, or just let go and animating: check again later.
+        val idle = SystemClock.uptimeMillis() - lastTurnActivity
+        if (frame?.isDragging == true || idle < STUCK_TURN_MS) {
+            main.postDelayed({ checkStuck(token) }, STUCK_TURN_MS)
+            return
+        }
+        endTurn()
     }
 
     private fun endTurn() {
@@ -552,6 +589,7 @@ class WebBookController(
     companion object {
         private const val TARGET_START = "{\"type\":\"start\"}"
         private const val TARGET_END = "{\"type\":\"end\"}"
+        private const val STUCK_TURN_MS = 3000L
 
         private fun fractionTarget(fraction: Double) = "{\"type\":\"fraction\",\"value\":$fraction}"
 
@@ -580,6 +618,7 @@ class ReaderFrame(context: Context) : FrameLayout(context) {
     private var downY = 0f
     private var tracking = false
     private var dragging = false
+    val isDragging: Boolean get() = dragging
     private var velocity: VelocityTracker? = null
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {

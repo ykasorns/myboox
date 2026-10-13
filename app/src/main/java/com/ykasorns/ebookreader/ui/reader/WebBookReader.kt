@@ -95,7 +95,11 @@ fun WebBookReader(book: Book, settings: ReaderSettings, chrome: ReaderChromeStat
             bottom = frame.bottom,
             left = frame.left + side,
         )
-        val styleJson = remember(settings, padding) { webStyleJson(settings, padding) }
+        val pageWidth = maxWidth.value
+        val pageHeight = maxHeight.value
+        val styleJson = remember(settings, padding, pageWidth, pageHeight) {
+            webStyleJson(settings, padding, pageWidth, pageHeight)
+        }
         val background = settings.theme.background.toInt()
         // Same rule as reader.js: two columns on wide landscape screens.
         val spread = settings.twoPageLandscape && maxWidth > maxHeight && maxWidth >= 700.dp
@@ -150,7 +154,7 @@ fun WebBookReader(book: Book, settings: ReaderSettings, chrome: ReaderChromeStat
 
 private fun cssColor(argb: Long) = String.format(Locale.US, "#%06X", argb and 0xFFFFFF)
 
-private fun webStyleJson(settings: ReaderSettings, padding: PagePadding): String {
+private fun webStyleJson(settings: ReaderSettings, padding: PagePadding, width: Float, height: Float): String {
     val theme = settings.theme
     return JSONObject()
         .put("bg", cssColor(theme.background))
@@ -162,6 +166,10 @@ private fun webStyleJson(settings: ReaderSettings, padding: PagePadding): String
         .put("lineHeight", settings.lineSpacing.value.toDouble())
         .put("justify", settings.justify)
         .put("twoPage", settings.twoPageLandscape)
+        // The page size in CSS pixels; reader.js lays columns out to exactly this.
+        .apply {
+            if (width.isFinite() && height.isFinite()) put("width", width.toDouble()).put("height", height.toDouble())
+        }
         // With the curl animation the app handles swipes; otherwise reader.js does.
         .put("swipe", settings.pageTurn != PageTurn.CURL)
         .put("animate", settings.pageTurn == PageTurn.SLIDE)
