@@ -153,9 +153,15 @@ class WebBookController(
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
-            useWideViewPort = false
+            // Honour the viewport tag added to every chapter (width=device-width, scale 1).
+            // Without it the WebView may lay the page out wider than the screen and leave
+            // parts of it unpainted.
+            useWideViewPort = true
             loadWithOverviewMode = false
             mediaPlaybackRequiresUserGesture = true
+            // Paint the whole page, not just what the WebView guesses is visible, so no blank
+            // blocks are left behind after page turns and snapshots.
+            offscreenPreRaster = true
         }
         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
             WebSettingsCompat.setAlgorithmicDarkeningAllowed(view.settings, false)
@@ -562,7 +568,7 @@ class WebBookController(
         val file = File(context.filesDir, path.removePrefix("/")).canonicalFile
         if (!file.path.startsWith(booksRoot.canonicalPath + File.separator) || !file.isFile) return null
         val html = file.readText(Charsets.UTF_8)
-        val tags = "<script src=\"/__reader/init.js?t=${System.nanoTime()}\"></script>" +
+        val tags = "$VIEWPORT_META<script src=\"/__reader/init.js?t=${System.nanoTime()}\"></script>" +
             "<script src=\"/__reader/reader.js\"></script>"
         val headEnd = Regex("</head\\s*>", RegexOption.IGNORE_CASE).find(html)
         val bodyStart = if (headEnd == null) Regex("<body[^>]*>", RegexOption.IGNORE_CASE).find(html) else null
@@ -590,6 +596,8 @@ class WebBookController(
         private const val TARGET_START = "{\"type\":\"start\"}"
         private const val TARGET_END = "{\"type\":\"end\"}"
         private const val STUCK_TURN_MS = 3000L
+        private const val VIEWPORT_META = "<meta name=\"viewport\" content=\"width=device-width, " +
+            "initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no\"/>"
 
         private fun fractionTarget(fraction: Double) = "{\"type\":\"fraction\",\"value\":$fraction}"
 

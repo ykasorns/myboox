@@ -26,6 +26,12 @@
   var userMoved = false;
   var ready = false;
 
+  // One screen-wide layout viewport at scale 1 (normally added by the app already).
+  var viewport = document.createElement('meta');
+  viewport.name = 'viewport';
+  viewport.content = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no';
+  (document.head || root).appendChild(viewport);
+
   root.classList.add('__rd_loading');
   var style = document.createElement('style');
   (document.head || document.getElementsByTagName('head')[0] || root).appendChild(style);
